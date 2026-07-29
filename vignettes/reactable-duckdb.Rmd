@@ -1,0 +1,181 @@
+---
+title: "Serving reactable tables from lazy DuckDB queries"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Serving reactable tables from lazy DuckDB queries}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+can_eval <- requireNamespace("duckdb", quietly = TRUE) &&
+  requireNamespace("duckplyr", quietly = TRUE) &&
+  reactableduckdb:::has_reactable_backend_api()
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = can_eval
+)
+```
+
+reactableduckdb streams a lazy DuckDB query — a duckplyr data frame or a
+dbplyr lazy table — into a [reactable](https://glin.github.io/reactable/)
+widget through reactable's custom server-side data backend API. DuckDB
+performs **all** filtering, counting, sorting, and pagination.
+
+Only three things are ever materialized into R:
+
+1. a **zero-row schema prototype** (once, at backend construction),
+2. a **scalar filtered count** (one number per distinct filter state), and
+3. the **requested page of rows** (bounded by `max_page_size`).
+
+Nothing else is collected — the complete source dataset never enters R.
+Anything the backend cannot do honestly it **refuses loudly** (a structured
+error) instead of silently falling back to eager execution or returning
+wrong data.
+
+> **Dependency note**: this package requires the **development version** of
+> reactable (>= 0.4.5.9000), which exports the server backend API; the CRAN
+> release does not. Install it from GitHub (`pak::pak("glin/reactable")`),
+> or from a Posit Package Manager repository that mirrors that GitHub
+> repository and needs no GitHub access. Either route
+> works — reactableduckdb declares no `Remotes` and does not require a
+> particular one. If the API is missing, the package warns once naming both
+> routes rather than refusing to load.
+
+## The intended workflow
+
+The application owns its pins and its data pipeline; the package only
+exposes the lazy result:
+
+```{r, eval = FALSE}
+pin_path <- pins::pin_download(board, "example-data")
+
+source_data <- duckplyr::read_parquet_duckdb(pin_path, prudence = "stingy") |>
+  dplyr::filter(distance_mi > 0) |>
+  dplyr::mutate(delay_hr = delay_min / 60) |>
+  dplyr::select(flight_id, carrier, distance_mi, delay_hr)
+
+backend <- reactable_duckdb_backend(source_data, key = "flight_id")
+
+# In a Shiny server:
+output$flights <- reactable::renderReactable(
+  reactable_duckdb(backend, filterable = TRUE, defaultPageSize = 50L)
+)
+```
+
+A working self-contained app ships with the package:
+`system.file("examples", "app.R", package = "reactableduckdb")`.
+
+```{r echo = FALSE, eval = TRUE, out.width = "100%", fig.alt = "The example Shiny app: a reactable table of 100,000 flights with the numeric range filter >=1500 applied to the distance column, showing 49,500 filtered rows paginated across 990 pages. Every column has a filter box except the display-only LIST column."}
+knitr::include_graphics("../man/figures/example-app.png")
+```
+
+*The screenshot is captured manually from the example app and may lag the
+current UI; regeneration steps are in the header of `inst/examples/app.R`.*
+
+### `group_by()` does not work under `prudence = "stingy"` — use `.by`
+
+duckplyr refuses `group_by()` on a stingy source. Use the `.by` argument
+instead; it stays fully lazy:
+
+```{r, eval = FALSE}
+# Errors under prudence = "stingy":
+source_data |> dplyr::group_by(carrier) |> dplyr::summarise(n = dplyr::n())
+
+# Works, stays lazy:
+source_data |> dplyr::summarise(n = dplyr::n(), .by = carrier)
+```
+
+## What one request executes
+
+```{r}
+library(reactableduckdb)
+
+con <- DBI::dbConnect(duckdb::duckdb())
+DBI::dbExecute(con, "
+  CREATE TABLE flights AS
+  SELECT i AS id, 'CARRIER_' || (i % 12) AS carrier,
+         (i % 3000)::INTEGER AS distance
+  FROM range(100000) r(i)")
+
+backend <- reactable_duckdb_backend(dplyr::tbl(con, "flights"), key = "id")
+reactableduckdb:::enable_query_log(backend)
+
+page <- reactable::reactableServerData(
+  backend,
+  pageIndex = 2,
+  pageSize = 5,
+  sortBy = list(list(id = "distance", desc = TRUE)),
+  filters = list(list(id = "carrier", value = "carrier_3"))
+)
+page$rowCount
+page$data
+```
+
+Two queries ran — a scalar count and a bounded page — and nothing else:
+
+```{r}
+cat(paste(backend$state$query_log, collapse = "\n\n"))
+```
+
+Note the shape: the user's filter value is a **bound literal** inside the
+dbplyr-rendered subquery (never pasted into SQL), ordering is explicit
+`NULLS LAST` in both directions with the `key` appended as a deterministic
+tie-breaker, and pagination is integer-only `LIMIT`/`OFFSET`.
+
+## Filtering
+
+The full grammar lives in `design/filter-contract.md`; the short version:
+
+| Column type | Grammar |
+| --- | --- |
+| text | case-insensitive literal substring; `%`, `_`, quotes all literal; `filter_spec` can force `exact` |
+| numeric | `10`, `-5`, `1.5`, `1e6`, `>=10`, `<-5`, `10..20` |
+| date | `2026-01-01`, `>=2026-01-01`, `2026-01-01..2026-01-31` |
+| datetime | ISO, interpreted as UTC instants, same comparators/ranges |
+| logical | `true/false/t/f/1/0`, case-insensitive |
+| LIST/STRUCT/MAP/BLOB | **display-only**: rendered, never filterable or sortable |
+
+Malformed input (e.g. `abc` in a numeric column, `2026-02-30`) raises a
+structured package error, never a raw database error. Empty input means no
+filter. Missing-value filtering is deferred in v1: NULL rows never match a
+filter, and sorting places NULLs last in both directions.
+
+## Refusals
+
+Unsupported features error at widget construction rather than degrading:
+`server`, `data`, `searchable = TRUE`, `searchMethod`, `groupBy`,
+`pagination = FALSE`, `paginateSubRows = TRUE`, `rownames = TRUE`, a
+`defaultPageSize` or `pageSizeOptions` entry above `max_page_size`, and
+explicitly re-enabling filter/sort on a display-only column. `selection`
+and `details` are allowed but apply to the **current page only**.
+
+Oversized page requests at runtime are refused, never clamped. In a live
+Shiny app a refused request surfaces as a failed (HTTP 500) data request
+and the table keeps its previous rows; the app's log carries a structured
+line with the backend's schema hash and the offending column ids (never
+filter values). Debounce filter inputs in production — reactable fires a
+request per keystroke.
+
+## Backend lifecycle, cache, and keys
+
+- The filtered **count is cached** (bounded LRU) per canonical filter set:
+  paging and re-sorting reuse it; changing filters does not. An app-global
+  backend over an immutable source shares its cache across sessions.
+- A live backend **cannot detect** that its source, schema, or pin changed,
+  and never reconnects or refreshes. When the source changes, construct a
+  new backend and re-render. An invalid connection errors with exactly that
+  instruction.
+- `key` should be a **unique** orderable column; it makes page order
+  deterministic. Uniqueness is the caller's responsibility unless you opt
+  into `validate_key = TRUE` (one scalar scan at construction).
+- Very deep `OFFSET` pagination is increasingly expensive in any SQL
+  engine; cursor pagination is out of scope for v1.
+
+Outside a Shiny session the widget renders empty (only the zero-row
+prototype is embedded) — the server backend needs a live session.
+
+```{r, include = FALSE}
+DBI::dbDisconnect(con, shutdown = TRUE)
+```

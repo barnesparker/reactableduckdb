@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "critical-code-reviewer": {
+      "source": "posit-dev/skills",
+      "sourceType": "github",
+      "skillPath": "posit-dev/critical-code-reviewer/SKILL.md",
+      "computedHash": "fb5de7c324b8437491c9a7f696193cb617364dcbba258dac79470d075855e5a5"
+    },
+    "r-package-development": {
+      "source": "posit-dev/skills",
+      "sourceType": "github",
+      "skillPath": "r-lib/r-package-development/SKILL.md",
+      "computedHash": "594752e17b593849e6113bccb5dcfcde024492635d12bcb5d9768bec810035b0"
+    },
+    "review-testing": {
+      "source": "posit-dev/skills",
+      "sourceType": "github",
+      "skillPath": "posit-dev/review-testing/SKILL.md",
+      "computedHash": "d650b79ca68f33d6f5a92985f282529b2eb10cfc5ddf1c9b62eff95e2ea4ba8c"
+    },
+    "testing-r-packages": {
+      "source": "posit-dev/skills",
+      "sourceType": "github",
+      "skillPath": "r-lib/testing-r-packages/SKILL.md",
+      "computedHash": "d12f089234e0bcb4b5dbd24f89b85513c03bca4f9b789613de1b4d8a51359d74"
+    }
+  }
+}

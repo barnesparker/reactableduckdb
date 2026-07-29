@@ -1,0 +1,20 @@
+url: ~
+template:
+  bootstrap: 5
+
+reference:
+- title: Server backend
+  desc: >
+    Wrap a lazy DuckDB query as a reactable server backend and render it.
+  contents:
+  - reactable_duckdb_backend
+  - reactable_duckdb
+- title: Package
+  contents:
+  - reactableduckdb-package
+
+articles:
+- title: Guides
+  navbar: ~
+  contents:
+  - reactable-duckdb

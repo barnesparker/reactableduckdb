@@ -1,0 +1,16 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.posit/assistant$
+^\.claude$
+^\.agents$
+^skills-lock\.json$
+^AGENTS\.md$
+^CLAUDE\.md$
+^design$
+^\.github$
+^README\.Rmd$
+^inst/benchmarks/.*\.(rds|csv|parquet|json)$
+^LICENSE\.md$
+^_pkgdown\.yml$
+^renv$
+^renv\.lock$

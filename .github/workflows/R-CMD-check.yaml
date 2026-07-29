@@ -1,0 +1,54 @@
+# CI for reactableduckdb.
+#
+# reactable must be the development build (>= 0.4.5.9000) exporting the
+# custom server backend API; the CRAN release does not. GitHub is the
+# canonical source, so CI installs from the pinned SHA recorded in
+# renv.lock. A Posit Package Manager repository mirroring the same
+# repository is an equally valid source on runners that prefer it.
+#
+# NOTE: this workflow has not been executed from the development machine.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+name: R-CMD-check
+
+jobs:
+  R-CMD-check:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      # Pinned in renv.lock and design/reactable-server-contract.md.
+      REACTABLE_DEV_REF: glin/reactable@4a438397eaa83ec71a4dc3e895bbdcc595232d78
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            ${{ env.REACTABLE_DEV_REF }}
+          needs: check
+
+      - name: Assert the reactable backend API is present
+        run: |
+          stopifnot(packageVersion("reactable") >= "0.4.5.9000")
+          exports <- getNamespaceExports("reactable")
+          needed <- c("reactableServerInit", "reactableServerData", "resolvedData")
+          stopifnot(all(needed %in% exports))
+        shell: Rscript {0}
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          # chromote-driven Shiny tests skip automatically without Chrome.

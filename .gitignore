@@ -1,0 +1,23 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+.posit/assistant
+
+# renv: keep the lockfile + settings, never the library
+renv/library/
+renv/local/
+renv/cellar/
+renv/python/
+renv/staging/
+renv/sandbox/
+
+# generated benchmark / example data — never committed
+inst/benchmarks/*.rds
+inst/benchmarks/*.csv
+inst/benchmarks/*.parquet
+inst/benchmarks/*.json
+*.parquet
+*.duckdb
+*.duckdb.wal
