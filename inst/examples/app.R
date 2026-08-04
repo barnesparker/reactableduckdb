@@ -52,8 +52,15 @@ local({
   if (length(missing) > 0) {
     stop(
       "The reactableduckdb example app cannot start; ",
-      length(missing), " package(s) are not installed:\n",
-      paste0("  - ", missing, "   install with: ", needed[missing], collapse = "\n"),
+      length(missing),
+      " package(s) are not installed:\n",
+      paste0(
+        "  - ",
+        missing,
+        "   install with: ",
+        needed[missing],
+        collapse = "\n"
+      ),
       "\n",
       call. = FALSE
     )
@@ -69,8 +76,10 @@ local({
   staging <- file.path(tempdir(), "example-flights.parquet")
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-  DBI::dbExecute(con, sprintf(
-    "COPY (
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY (
        SELECT i AS flight_id,
               'CARRIER_' || (i %% 12) AS carrier,
               CASE WHEN i %% 11 = 0 THEN NULL
@@ -82,8 +91,9 @@ local({
               [i %% 5, i %% 7] AS gate_history
        FROM range(100000) r(i)
      ) TO '%s' (FORMAT PARQUET)",
-    staging
-  ))
+      staging
+    )
+  )
   pins::pin_upload(board, staging, "example-flights")
 })
 
@@ -97,8 +107,16 @@ source_data <- duckplyr::read_parquet_duckdb(pin_path, prudence = "stingy") |>
     long_haul = distance_mi > 1500
   ) |>
   dplyr::select(
-    flight_id, carrier, origin, flight_date, distance_mi,
-    delay_min, delay_hr, long_haul, is_international, gate_history
+    flight_id,
+    carrier,
+    origin,
+    flight_date,
+    distance_mi,
+    delay_min,
+    delay_hr,
+    long_haul,
+    is_international,
+    gate_history
   )
 
 # 3. The package exposes the lazy result through reactable ------------------
@@ -115,12 +133,21 @@ ui <- bslib::page_sidebar(
       "R only ever holds the page you see."
     ),
     p(
-      strong("Try:"), "type", code("CARRIER_3"), "in the carrier filter,",
-      code(">=1500"), "in distance,", code("2026-06-01..2026-06-30"),
-      "in the date column, or", code("true"), "in international."
+      strong("Try:"),
+      "type",
+      code("CARRIER_3"),
+      "in the carrier filter,",
+      code(">=1500"),
+      "in distance,",
+      code("2026-06-01..2026-06-30"),
+      "in the date column, or",
+      code("true"),
+      "in international."
     ),
     p(
-      "The", code("gate_history"), "column is a DuckDB LIST: it renders,",
+      "The",
+      code("gate_history"),
+      "column is a DuckDB LIST: it renders,",
       "but is deliberately not filterable or sortable (display-only)."
     )
   ),

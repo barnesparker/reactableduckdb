@@ -51,7 +51,11 @@ test_that("an aggregated stingy pipeline paginates and counts correctly", {
       .by = c(grp, flag)
     )
   b <- reactable_duckdb_backend(aggregated, key = "grp")
-  rd <- server_data(b, pageSize = 5, sortBy = list(list(id = "total", desc = TRUE)))
+  rd <- server_data(
+    b,
+    pageSize = 5,
+    sortBy = list(list(id = "total", desc = TRUE))
+  )
   expect_identical(rd$rowCount, 14)
   expect_identical(nrow(rd$data), 5L)
   expect_identical(order(rd$data$total, decreasing = TRUE), 1:5)

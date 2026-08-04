@@ -25,11 +25,26 @@ test_that("large offsets are formatted without scientific notation", {
 
 test_that("duckdb_page_sql refuses malformed inputs", {
   page_sql <- reactableduckdb:::duckdb_page_sql
-  expect_error(page_sql("", character(0), 10, 0), class = "reactableduckdb_page_error")
-  expect_error(page_sql("SELECT 1", character(0), 0, 0), class = "reactableduckdb_page_error")
-  expect_error(page_sql("SELECT 1", character(0), 10.5, 0), class = "reactableduckdb_page_error")
-  expect_error(page_sql("SELECT 1", character(0), 10, -1), class = "reactableduckdb_page_error")
-  expect_error(page_sql("SELECT 1", character(0), 10, 2^53 + 2), class = "reactableduckdb_page_error")
+  expect_error(
+    page_sql("", character(0), 10, 0),
+    class = "reactableduckdb_page_error"
+  )
+  expect_error(
+    page_sql("SELECT 1", character(0), 0, 0),
+    class = "reactableduckdb_page_error"
+  )
+  expect_error(
+    page_sql("SELECT 1", character(0), 10.5, 0),
+    class = "reactableduckdb_page_error"
+  )
+  expect_error(
+    page_sql("SELECT 1", character(0), 10, -1),
+    class = "reactableduckdb_page_error"
+  )
+  expect_error(
+    page_sql("SELECT 1", character(0), 10, 2^53 + 2),
+    class = "reactableduckdb_page_error"
+  )
 })
 
 test_that("check_page_params validates and never clamps", {
@@ -110,6 +125,12 @@ test_that("negative and fractional pageIndex requests error, never clamp", {
   b <- local_backend(n = 2000)
   # Upstream's reference dfPaginate() clamps out-of-range page indices; this
   # backend deliberately refuses instead (plan section 11).
-  expect_error(server_data(b, pageIndex = -1), class = "reactableduckdb_page_error")
-  expect_error(server_data(b, pageIndex = 1.5), class = "reactableduckdb_page_error")
+  expect_error(
+    server_data(b, pageIndex = -1),
+    class = "reactableduckdb_page_error"
+  )
+  expect_error(
+    server_data(b, pageIndex = 1.5),
+    class = "reactableduckdb_page_error"
+  )
 })

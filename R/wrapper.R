@@ -18,8 +18,12 @@ quote_ident <- function(id) {
 # parsed JSON requests. Every id is re-validated here (defense in depth) and
 # quoted unconditionally. When `key` is supplied and not already sorted, it
 # is appended ascending as a deterministic tie-breaker.
-build_order_clauses <- function(sort_by, key, capability,
-                                call = rlang::caller_env()) {
+build_order_clauses <- function(
+  sort_by,
+  key,
+  capability,
+  call = rlang::caller_env()
+) {
   sort_by <- sort_by %||% list()
   if (!is.list(sort_by)) {
     rd_abort(
@@ -58,8 +62,13 @@ build_order_clauses <- function(sort_by, key, capability,
 # come from build_order_clauses(); limit/offset are validated exact whole
 # numbers. Formatted without scientific notation so large offsets stay legal
 # SQL.
-duckdb_page_sql <- function(base_sql, order_clauses, limit, offset,
-                            call = rlang::caller_env()) {
+duckdb_page_sql <- function(
+  base_sql,
+  order_clauses,
+  limit,
+  offset,
+  call = rlang::caller_env()
+) {
   if (!is.character(base_sql) || length(base_sql) != 1L || !nzchar(base_sql)) {
     rd_abort(
       "{.arg base_sql} must be a single non-empty SQL string.",

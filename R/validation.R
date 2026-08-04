@@ -2,8 +2,13 @@
 # raises carries a `reactableduckdb_<class>` class plus the common
 # `reactableduckdb_error` parent, so callers and tests can catch precisely.
 
-rd_abort <- function(message, class, ..., call = rlang::caller_env(),
-                     .envir = rlang::caller_env()) {
+rd_abort <- function(
+  message,
+  class,
+  ...,
+  call = rlang::caller_env(),
+  .envir = rlang::caller_env()
+) {
   cli::cli_abort(
     message,
     class = c(paste0("reactableduckdb_", class), "reactableduckdb_error"),
@@ -69,8 +74,12 @@ check_flag <- function(x, arg, call = rlang::caller_env()) {
 
 # Validates a page request. Never clamps: an oversized or malformed request is
 # refused with a structured error. Returns limit/offset as exact doubles.
-check_page_params <- function(page_index, page_size, max_page_size,
-                              call = rlang::caller_env()) {
+check_page_params <- function(
+  page_index,
+  page_size,
+  max_page_size,
+  call = rlang::caller_env()
+) {
   if (!is_whole_number(page_index) || page_index < 0) {
     rd_abort(
       "{.arg pageIndex} must be a single whole number >= 0, not {.obj_type_friendly {page_index}}.",
@@ -110,7 +119,12 @@ check_page_params <- function(page_index, page_size, max_page_size,
 
 # Column-id validation against the schema and capability map. `purpose` is
 # "filter" or "sort"; display-only columns are refused for both.
-check_column_id <- function(id, capability, purpose, call = rlang::caller_env()) {
+check_column_id <- function(
+  id,
+  capability,
+  purpose,
+  call = rlang::caller_env()
+) {
   if (!is.character(id) || length(id) != 1L || is.na(id) || !nzchar(id)) {
     rd_abort(
       "Each {purpose} request must name a column with a single non-empty string id.",

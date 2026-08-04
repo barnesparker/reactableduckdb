@@ -24,7 +24,11 @@ test_that("NULLS LAST holds in both sort directions", {
   expect_gt(n_null, 0)
 
   for (desc in c(FALSE, TRUE)) {
-    rd <- server_data(b, pageSize = 200, sortBy = list(list(id = "grp", desc = desc)))
+    rd <- server_data(
+      b,
+      pageSize = 200,
+      sortBy = list(list(id = "grp", desc = desc))
+    )
     expect_identical(which(is.na(rd$data$grp)), seq(200 - n_null + 1, 200))
   }
 })
@@ -33,7 +37,10 @@ test_that("rendered ORDER BY uses explicit NULLS LAST for every clause", {
   skip_if_no_backend_api()
   b <- local_backend(n = 200, key = "id")
   reactableduckdb:::enable_query_log(b)
-  server_data(b, sortBy = list(list(id = "grp", desc = TRUE), list(id = "qty", desc = FALSE)))
+  server_data(
+    b,
+    sortBy = list(list(id = "grp", desc = TRUE), list(id = "qty", desc = FALSE))
+  )
   sql <- last_page_sql(b)
   expect_match(sql, '"grp" DESC NULLS LAST')
   expect_match(sql, '"qty" ASC NULLS LAST')
@@ -54,7 +61,9 @@ test_that("key is appended as tie-breaker only when not already sorted", {
   clauses <- reactableduckdb:::build_order_clauses(
     list(list(id = "id", desc = TRUE)),
     key = "id",
-    capability = list(id = list(filterable = TRUE, sortable = TRUE, r_type = "numeric"))
+    capability = list(
+      id = list(filterable = TRUE, sortable = TRUE, r_type = "numeric")
+    )
   )
   expect_identical(clauses, '"id" DESC NULLS LAST')
 })
@@ -63,7 +72,11 @@ test_that("key tie-breaker makes ties deterministic", {
   skip_if_no_backend_api()
   b <- local_backend(n = 2000, key = "id")
   reference <- collect_reference(b)
-  rd <- server_data(b, pageSize = 50, sortBy = list(list(id = "flag", desc = TRUE)))
+  rd <- server_data(
+    b,
+    pageSize = 50,
+    sortBy = list(list(id = "flag", desc = TRUE))
+  )
   expected <- reference[order(!reference$flag, reference$id), ]
   expect_identical(rd$data$id, expected$id[1:50])
 })

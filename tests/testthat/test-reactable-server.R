@@ -29,11 +29,16 @@ test_that("filter + multi-sort + pagination compose in one request", {
     b,
     pageIndex = 1,
     pageSize = 10,
-    sortBy = list(list(id = "grp", desc = FALSE), list(id = "amount", desc = TRUE)),
+    sortBy = list(
+      list(id = "grp", desc = FALSE),
+      list(id = "amount", desc = TRUE)
+    ),
     filters = list(list(id = "qty", value = ">=50"))
   )
   subset <- reference[reference$qty >= 50, ]
-  expected <- subset[order(subset$grp, -subset$amount, subset$id, na.last = TRUE), ]
+  expected <- subset[
+    order(subset$grp, -subset$amount, subset$id, na.last = TRUE),
+  ]
   expect_equal(rd$rowCount, nrow(subset))
   expect_identical(rd$data$id, expected$id[11:20])
 })
@@ -50,7 +55,10 @@ test_that("global search and grouping requests are refused defensively", {
     class = "reactableduckdb_unsupported_arg"
   )
   # Empty values are not requests.
-  expect_s3_class(server_data(b, searchValue = "", groupBy = list()), "reactable_resolvedData")
+  expect_s3_class(
+    server_data(b, searchValue = "", groupBy = list()),
+    "reactable_resolvedData"
+  )
 })
 
 test_that("an invalidated connection raises a rebuild error", {
@@ -73,7 +81,13 @@ test_that("request failures are logged with ids only, then re-raised", {
   messages <- character(0)
   withCallingHandlers(
     expect_error(
-      server_data(b, filters = list(list(id = "name", value = "secret-value"), list(id = "nope", value = "x"))),
+      server_data(
+        b,
+        filters = list(
+          list(id = "name", value = "secret-value"),
+          list(id = "nope", value = "x")
+        )
+      ),
       class = "reactableduckdb_filter_error"
     ),
     message = function(m) {
@@ -138,15 +152,24 @@ test_that("explicitly re-enabling filter/sort on display-only errors", {
   skip_if_no_backend_api()
   b <- local_backend(n = 100)
   expect_error(
-    reactable_duckdb(b, columns = list(tags = reactable::colDef(filterable = TRUE))),
+    reactable_duckdb(
+      b,
+      columns = list(tags = reactable::colDef(filterable = TRUE))
+    ),
     class = "reactableduckdb_unsupported_arg"
   )
   expect_error(
-    reactable_duckdb(b, columns = list(tags = reactable::colDef(sortable = TRUE))),
+    reactable_duckdb(
+      b,
+      columns = list(tags = reactable::colDef(sortable = TRUE))
+    ),
     class = "reactableduckdb_unsupported_arg"
   )
   # An explicit FALSE is redundant but allowed.
-  w <- reactable_duckdb(b, columns = list(tags = reactable::colDef(filterable = FALSE)))
+  w <- reactable_duckdb(
+    b,
+    columns = list(tags = reactable::colDef(filterable = FALSE))
+  )
   expect_s3_class(w, "reactable")
 })
 

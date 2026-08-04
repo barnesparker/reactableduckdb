@@ -11,9 +11,21 @@ test_that("required backend API is exported and functional", {
 test_that("generic formals match the recorded contract", {
   skip_if_no_backend_api()
   expected <- c(
-    "x", "data", "columns", "pageIndex", "pageSize", "sortBy", "filters",
-    "searchValue", "searchMethod", "groupBy", "pagination",
-    "paginateSubRows", "selectedRowIds", "expanded", "..."
+    "x",
+    "data",
+    "columns",
+    "pageIndex",
+    "pageSize",
+    "sortBy",
+    "filters",
+    "searchValue",
+    "searchMethod",
+    "groupBy",
+    "pagination",
+    "paginateSubRows",
+    "selectedRowIds",
+    "expanded",
+    "..."
   )
   expect_identical(names(formals(reactable::reactableServerInit)), expected)
   expect_identical(names(formals(reactable::reactableServerData)), expected)
@@ -27,8 +39,10 @@ test_that("the API detection tolerates upstream adding arguments", {
   # The dev version is a moving target, so detection must be a subset
   # check: an extra formal upstream must not read as a broken install.
   expect_true(
-    all(reactableduckdb:::required_resolveddata_formals %in%
-      c(reactableduckdb:::required_resolveddata_formals, "somethingNew"))
+    all(
+      reactableduckdb:::required_resolveddata_formals %in%
+        c(reactableduckdb:::required_resolveddata_formals, "somethingNew")
+    )
   )
   expect_true(reactableduckdb:::has_reactable_backend_api())
 })

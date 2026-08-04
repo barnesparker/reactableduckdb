@@ -28,8 +28,10 @@ carriers_pq <- file.path(out_dir, "carriers.parquet")
 
 message("Generating ", format(n_rows, big.mark = ","), " rows of Parquet...")
 con <- DBI::dbConnect(duckdb::duckdb())
-DBI::dbExecute(con, sprintf(
-  "COPY (
+DBI::dbExecute(
+  con,
+  sprintf(
+    "COPY (
      SELECT i AS flight_id,
             'CARRIER_' || (i %% 40) AS carrier,
             CASE WHEN i %% 11 = 0 THEN NULL ELSE 'APT_' || (i %% 300) END AS origin,
@@ -39,15 +41,20 @@ DBI::dbExecute(con, sprintf(
             (i %% 4 = 0) AS is_international
      FROM range(%d) r(i)
    ) TO '%s' (FORMAT PARQUET)",
-  n_rows, flights_pq
-))
-DBI::dbExecute(con, sprintf(
-  "COPY (
+    n_rows,
+    flights_pq
+  )
+)
+DBI::dbExecute(
+  con,
+  sprintf(
+    "COPY (
      SELECT 'CARRIER_' || i AS carrier, 'Carrier name %%' || i AS carrier_name
      FROM range(40) r(i)
    ) TO '%s' (FORMAT PARQUET)",
-  carriers_pq
-))
+    carriers_pq
+  )
+)
 DBI::dbDisconnect(con, shutdown = TRUE)
 
 flat <- duckplyr::read_parquet_duckdb(flights_pq, prudence = "stingy")
@@ -71,14 +78,16 @@ joined <- flat |>
 shapes <- list(flat = flat, aggregated = aggregated, joined = joined)
 
 filters_for <- function(shape) {
-  switch(shape,
+  switch(
+    shape,
     flat = list(list(id = "carrier", value = "CARRIER_1")),
     aggregated = list(list(id = "flights", value = ">=1000")),
     joined = list(list(id = "carrier_name", value = "name %1"))
   )
 }
 sort_for <- function(shape) {
-  switch(shape,
+  switch(
+    shape,
     flat = list(list(id = "delay_min", desc = TRUE)),
     aggregated = list(list(id = "mean_delay", desc = TRUE)),
     joined = list(list(id = "delay_hr", desc = TRUE))
@@ -97,7 +106,10 @@ for (shape in names(shapes)) {
   }
   bm <- bench::mark(
     backend_creation = {
-      backend <- reactableduckdb::reactable_duckdb_backend(shapes[[shape]], key = key)
+      backend <- reactableduckdb::reactable_duckdb_backend(
+        shapes[[shape]],
+        key = key
+      )
     },
     count_and_first_page = request(pageIndex = 0),
     filtered_page = request(pageIndex = 0, filters = filters_for(shape)),
@@ -114,7 +126,10 @@ for (shape in names(shapes)) {
 
 all_results <- do.call(rbind, results)
 saveRDS(all_results, "benchmark-results.rds")
-message("\nStructural proof: every request above returned <= 50 rows and a ",
-        "scalar count, against a ", format(n_rows, big.mark = ","),
-        "-row source. Results saved to benchmark-results.rds")
+message(
+  "\nStructural proof: every request above returned <= 50 rows and a ",
+  "scalar count, against a ",
+  format(n_rows, big.mark = ","),
+  "-row source. Results saved to benchmark-results.rds"
+)
 unlink(out_dir, recursive = TRUE)

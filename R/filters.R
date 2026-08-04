@@ -28,8 +28,11 @@ infer_capability_type <- function(col) {
 # Capability map built once at construction from the prototype's R types,
 # with per-column overrides from `filter_spec`. Each entry:
 # list(type, filterable, sortable, exact, r_type).
-build_capability_map <- function(prototype, filter_spec = NULL,
-                                 call = rlang::caller_env()) {
+build_capability_map <- function(
+  prototype,
+  filter_spec = NULL,
+  call = rlang::caller_env()
+) {
   validate_filter_spec(filter_spec, prototype, call = call)
   capability <- lapply(names(prototype), function(id) {
     col <- prototype[[id]]
@@ -49,13 +52,19 @@ build_capability_map <- function(prototype, filter_spec = NULL,
   stats::setNames(capability, names(prototype))
 }
 
-validate_filter_spec <- function(filter_spec, prototype,
-                                 call = rlang::caller_env()) {
+validate_filter_spec <- function(
+  filter_spec,
+  prototype,
+  call = rlang::caller_env()
+) {
   if (is.null(filter_spec)) {
     return(invisible(NULL))
   }
-  if (!is.list(filter_spec) || is.null(names(filter_spec)) ||
-      any(!nzchar(names(filter_spec)))) {
+  if (
+    !is.list(filter_spec) ||
+      is.null(names(filter_spec)) ||
+      any(!nzchar(names(filter_spec)))
+  ) {
     rd_abort(
       "{.arg filter_spec} must be a fully named list of per-column specs.",
       class = "spec_error",
@@ -92,8 +101,11 @@ validate_filter_spec <- function(filter_spec, prototype,
     }
     inferred <- infer_capability_type(prototype[[id]])
     if (!is.null(spec$type)) {
-      if (!is.character(spec$type) || length(spec$type) != 1L ||
-          !spec$type %in% filter_types) {
+      if (
+        !is.character(spec$type) ||
+          length(spec$type) != 1L ||
+          !spec$type %in% filter_types
+      ) {
         rd_abort(
           "{.arg filter_spec} entry {.val {id}}: {.field type} must be one of {.val {filter_types}}.",
           class = "spec_error",
@@ -112,8 +124,9 @@ validate_filter_spec <- function(filter_spec, prototype,
       }
     }
     if (!is.null(spec$exact)) {
-      if (!is.logical(spec$exact) || length(spec$exact) != 1L ||
-          is.na(spec$exact)) {
+      if (
+        !is.logical(spec$exact) || length(spec$exact) != 1L || is.na(spec$exact)
+      ) {
         rd_abort(
           "{.arg filter_spec} entry {.val {id}}: {.field exact} must be `TRUE` or `FALSE`.",
           class = "spec_error",
@@ -124,7 +137,7 @@ validate_filter_spec <- function(filter_spec, prototype,
       if (effective != "text") {
         rd_abort(
           "{.arg filter_spec} entry {.val {id}}: {.field exact} only applies to text columns, and {.val {id}} filters as {.val {effective}}.",
-        class = "spec_error",
+          class = "spec_error",
           call = call
         )
       }
@@ -142,8 +155,13 @@ datetime_pattern <- paste0(
   "(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?)?"
 )
 
-filter_value_abort <- function(id, value, type, hint = NULL,
-                               call = rlang::caller_env()) {
+filter_value_abort <- function(
+  id,
+  value,
+  type,
+  hint = NULL,
+  call = rlang::caller_env()
+) {
   msg <- "Cannot parse filter value {.val {value}} for column {.val {id}} as a {type} filter."
   if (!is.null(hint)) {
     msg <- c(msg, "i" = hint)
@@ -187,7 +205,9 @@ parse_date_parts <- function(id, value, matched, call) {
   dates <- as.Date(matched$parts, format = "%Y-%m-%d")
   if (anyNA(dates)) {
     filter_value_abort(
-      id, value, "date",
+      id,
+      value,
+      "date",
       hint = "Dates must be real ISO dates like {.val 2026-01-31}.",
       call = call
     )
@@ -205,7 +225,9 @@ parse_datetime_parts <- function(id, value, matched, call) {
   )
   if (anyNA(parsed)) {
     filter_value_abort(
-      id, value, "datetime",
+      id,
+      value,
+      "datetime",
       hint = "Datetimes are ISO, interpreted as UTC: {.val 2026-01-31} or {.val 2026-01-31 12:00:00}.",
       call = call
     )
@@ -245,7 +267,9 @@ parse_filter_value <- function(id, value, cap, call = rlang::caller_env()) {
     matched <- match_comparison(value, number_pattern)
     if (is.null(matched)) {
       filter_value_abort(
-        id, value, "numeric",
+        id,
+        value,
+        "numeric",
         hint = "Supported: {.val 10}, {.val -5}, {.val 1.5}, {.val 1e6}, {.val >=10}, {.val <-5}, {.val 10..20}.",
         call = call
       )
@@ -255,7 +279,9 @@ parse_filter_value <- function(id, value, cap, call = rlang::caller_env()) {
     matched <- match_comparison(value, date_pattern)
     if (is.null(matched)) {
       filter_value_abort(
-        id, value, "date",
+        id,
+        value,
+        "date",
         hint = "Supported: {.val 2026-01-01}, {.val >=2026-01-01}, {.val 2026-01-01..2026-01-31}.",
         call = call
       )
@@ -265,7 +291,9 @@ parse_filter_value <- function(id, value, cap, call = rlang::caller_env()) {
     matched <- match_comparison(value, datetime_pattern)
     if (is.null(matched)) {
       filter_value_abort(
-        id, value, "datetime",
+        id,
+        value,
+        "datetime",
         hint = "Supported: ISO datetimes (UTC) with the numeric comparators and {.val ..} ranges.",
         call = call
       )
@@ -279,7 +307,9 @@ parse_filter_value <- function(id, value, cap, call = rlang::caller_env()) {
       values <- FALSE
     } else {
       filter_value_abort(
-        id, value, "logical",
+        id,
+        value,
+        "logical",
         hint = "Supported (case-insensitive): {.val true}, {.val false}, {.val t}, {.val f}, {.val 1}, {.val 0}.",
         call = call
       )
@@ -293,7 +323,9 @@ parse_filter_value <- function(id, value, cap, call = rlang::caller_env()) {
   if (matched$op == "between") {
     if (values[[1]] > values[[2]]) {
       filter_value_abort(
-        id, value, type,
+        id,
+        value,
+        type,
         hint = "Range lower bound is greater than the upper bound.",
         call = call
       )
@@ -330,7 +362,9 @@ build_filter_predicate <- function(id, parsed) {
   if (op == "between") {
     return(rlang::call2(
       rlang::call2("::", rlang::sym("dplyr"), rlang::sym("between")),
-      col, values[[1]], values[[2]]
+      col,
+      values[[1]],
+      values[[2]]
     ))
   }
   rlang::call2(op, col, values)
@@ -340,8 +374,11 @@ build_filter_predicate <- function(id, parsed) {
 # entries (the shape reactable sends both at construction and from parsed
 # JSON). Returns predicates plus the canonical form used as the count cache
 # key.
-parse_filters_request <- function(filters, capability,
-                                  call = rlang::caller_env()) {
+parse_filters_request <- function(
+  filters,
+  capability,
+  call = rlang::caller_env()
+) {
   filters <- filters %||% list()
   if (!is.list(filters)) {
     rd_abort(
@@ -360,18 +397,26 @@ parse_filters_request <- function(filters, capability,
         call = call
       )
     }
-    cap <- check_column_id(entry$id, capability, purpose = "filter", call = call)
+    cap <- check_column_id(
+      entry$id,
+      capability,
+      purpose = "filter",
+      call = call
+    )
     parsed <- parse_filter_value(entry$id, entry$value, cap, call = call)
     if (is.null(parsed)) {
       next
     }
     predicates <- c(predicates, list(build_filter_predicate(entry$id, parsed)))
-    canonical <- c(canonical, list(list(
-      id = entry$id,
-      type = parsed$type,
-      op = parsed$op,
-      values = as.character(parsed$values)
-    )))
+    canonical <- c(
+      canonical,
+      list(list(
+        id = entry$id,
+        type = parsed$type,
+        op = parsed$op,
+        values = as.character(parsed$values)
+      ))
+    )
   }
   if (length(canonical) > 0) {
     canonical <- canonical[order(vapply(canonical, `[[`, "", "id"))]

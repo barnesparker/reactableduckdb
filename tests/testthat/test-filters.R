@@ -1,5 +1,9 @@
 filter_one <- function(backend, id, value, pageSize = 200) {
-  server_data(backend, pageSize = pageSize, filters = list(list(id = id, value = value)))
+  server_data(
+    backend,
+    pageSize = pageSize,
+    filters = list(list(id = id, value = value))
+  )
 }
 
 # Text ------------------------------------------------------------------------
@@ -66,7 +70,10 @@ test_that("empty and NULL text filters mean no filter", {
 test_that("filter_spec exact overrides substring matching", {
   skip_if_no_backend_api()
   tbl <- local_duckdb_tbl(n = 2000)
-  b <- reactable_duckdb_backend(tbl, filter_spec = list(name = list(exact = TRUE)))
+  b <- reactable_duckdb_backend(
+    tbl,
+    filter_spec = list(name = list(exact = TRUE))
+  )
   rd <- filter_one(b, "name", "name_11")
   expect_identical(sort(unique(rd$data$name)), "name_11")
   # Exact: the substring "name_1" no longer matches name_11.
@@ -100,7 +107,10 @@ test_that("the numeric grammar covers the documented forms", {
 test_that("negative numbers and scientific notation parse", {
   skip_if_no_backend_api()
   con <- local_duckdb_con()
-  DBI::dbExecute(con, "CREATE TABLE neg AS SELECT (i - 50)::DOUBLE AS x, i AS id FROM range(100) r(i)")
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE neg AS SELECT (i - 50)::DOUBLE AS x, i AS id FROM range(100) r(i)"
+  )
   b <- reactable_duckdb_backend(dplyr::tbl(con, "neg"), key = "id")
   expect_identical(filter_one(b, "x", "-5")$rowCount, 1)
   expect_identical(filter_one(b, "x", ">-5")$rowCount, 54)
@@ -131,7 +141,11 @@ test_that("date filters support equality, comparators, and ranges", {
     list("2026-01-05", reference$dt == as.Date("2026-01-05")),
     list(">=2026-12-01", reference$dt >= as.Date("2026-12-01")),
     list("<=2026-01-03", reference$dt <= as.Date("2026-01-03")),
-    list("2026-01-01..2026-01-31", reference$dt >= as.Date("2026-01-01") & reference$dt <= as.Date("2026-01-31"))
+    list(
+      "2026-01-01..2026-01-31",
+      reference$dt >= as.Date("2026-01-01") &
+        reference$dt <= as.Date("2026-01-31")
+    )
   )
   for (case in cases) {
     rd <- filter_one(b, "dt", case[[1]])
@@ -147,7 +161,10 @@ test_that("datetime filters compare as UTC instants", {
   rd <- filter_one(b, "ts", ">=2026-01-05 12:00:00")
   expect_equal(rd$rowCount, sum(reference$ts >= cutoff))
   rd <- filter_one(b, "ts", "2026-01-01 05:00:00")
-  expect_equal(rd$rowCount, sum(reference$ts == as.POSIXct("2026-01-01 05:00:00", tz = "UTC")))
+  expect_equal(
+    rd$rowCount,
+    sum(reference$ts == as.POSIXct("2026-01-01 05:00:00", tz = "UTC"))
+  )
 })
 
 test_that("impossible calendar dates are refused", {
@@ -168,12 +185,19 @@ test_that("logical filters accept the documented spellings", {
   skip_if_no_backend_api()
   b <- local_backend(n = 2000)
   for (truthy in c("true", "TRUE", "t", "1", " T ")) {
-    expect_identical(filter_one(b, "flag", truthy)$rowCount, 1000, info = truthy)
+    expect_identical(
+      filter_one(b, "flag", truthy)$rowCount,
+      1000,
+      info = truthy
+    )
   }
   for (falsy in c("false", "F", "0")) {
     expect_identical(filter_one(b, "flag", falsy)$rowCount, 1000, info = falsy)
   }
-  expect_error(filter_one(b, "flag", "yes"), class = "reactableduckdb_filter_error")
+  expect_error(
+    filter_one(b, "flag", "yes"),
+    class = "reactableduckdb_filter_error"
+  )
 })
 
 # Capability + spec refusals --------------------------------------------------
@@ -181,8 +205,14 @@ test_that("logical filters accept the documented spellings", {
 test_that("unknown and display-only filter columns are refused", {
   skip_if_no_backend_api()
   b <- local_backend(n = 200)
-  expect_error(filter_one(b, "nope", "x"), class = "reactableduckdb_filter_error")
-  expect_error(filter_one(b, "tags", "x"), class = "reactableduckdb_filter_error")
+  expect_error(
+    filter_one(b, "nope", "x"),
+    class = "reactableduckdb_filter_error"
+  )
+  expect_error(
+    filter_one(b, "tags", "x"),
+    class = "reactableduckdb_filter_error"
+  )
 })
 
 test_that("malformed filter requests are refused", {
@@ -202,11 +232,17 @@ test_that("filter_spec is validated at construction", {
   skip_if_no_backend_api()
   tbl <- local_duckdb_tbl(n = 50)
   expect_error(
-    reactable_duckdb_backend(tbl, filter_spec = list(nope = list(exact = TRUE))),
+    reactable_duckdb_backend(
+      tbl,
+      filter_spec = list(nope = list(exact = TRUE))
+    ),
     class = "reactableduckdb_spec_error"
   )
   expect_error(
-    reactable_duckdb_backend(tbl, filter_spec = list(tags = list(type = "text"))),
+    reactable_duckdb_backend(
+      tbl,
+      filter_spec = list(tags = list(type = "text"))
+    ),
     class = "reactableduckdb_spec_error"
   )
   expect_error(
@@ -214,7 +250,10 @@ test_that("filter_spec is validated at construction", {
     class = "reactableduckdb_spec_error"
   )
   expect_error(
-    reactable_duckdb_backend(tbl, filter_spec = list(name = list(fuzzy = TRUE))),
+    reactable_duckdb_backend(
+      tbl,
+      filter_spec = list(name = list(fuzzy = TRUE))
+    ),
     class = "reactableduckdb_spec_error"
   )
 })
@@ -247,7 +286,10 @@ test_that("filters and sorts work on non-syntactic column names", {
   rd <- server_data(
     b,
     pageSize = 10,
-    sortBy = list(list(id = "1st value", desc = TRUE), list(id = "select", desc = FALSE))
+    sortBy = list(
+      list(id = "1st value", desc = TRUE),
+      list(id = "select", desc = FALSE)
+    )
   )
   expect_identical(nrow(rd$data), 10L)
   sql <- last_page_sql(b)
