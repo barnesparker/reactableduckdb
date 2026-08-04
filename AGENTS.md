@@ -39,6 +39,34 @@ API by subset checks, never by exact signature equality, and **warn** rather tha
 when detection fails: a stale check is as likely as a broken install, and a genuinely
 missing API still fails loudly from reactable itself.
 
+## Validating against the source tree (mandatory)
+
+**The working source tree is authoritative.** A test run that loads an installed copy of
+reactableduckdb proves nothing about the code you just changed.
+
+- **Test files must not load reactableduckdb themselves.** No `library(reactableduckdb)`,
+  `require()`, `requireNamespace()`, or `loadNamespace()` anywhere under `tests/testthat/`.
+  The runner supplies the package.
+- **Run tests with `make test`** — equivalently `devtools::test()` or
+  `testthat::test_local(".", load_package = "source")`. All three load the working tree
+  with pkgload.
+- **Never use `library(reactableduckdb)` or `testthat::test_package("reactableduckdb")` to
+  validate source changes.** Both resolve to the installed library and will happily pass
+  against code you did not write.
+- **`pkgload::load_all()` is for interactive development outside the test suite.** The one
+  exception inside the suite is a spawned R process (`callr::r_bg()`), which is a fresh
+  session and must load the source tree explicitly. Call
+  `pkgload::load_all(pkg_dir, quiet = TRUE)` **unconditionally**, followed by
+  `stopifnot(pkgload::is_dev_package("reactableduckdb"))`. Never make it a `tryCatch()`
+  fallback behind `library()` — that shape silently tests the installed build whenever one
+  exists, which is exactly the bug this rule exists to prevent.
+- `tests/testthat.R` is R CMD check's entry point and the sole sanctioned `library()` call.
+  R CMD check installs a build of *this* tree, so it is not a stale copy. Do not use it as
+  a development loop.
+
+`tests/testthat/test-source-tree.R` enforces the first and fourth bullets and asserts the
+suite is running against a dev package. If it fails, fix the loading, not the test.
+
 ## Design documents (authoritative)
 
 - `design/reactable-server-contract.md` — the empirically observed upstream reactable

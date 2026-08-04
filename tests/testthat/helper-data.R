@@ -10,6 +10,30 @@ skip_if_no_backend_api <- function() {
   }
 }
 
+# Tests that spawn an app with callr::r_bg() need the package inside a fresh R
+# session, and it must be the working source tree -- an installed copy would
+# make them pass or fail for code that is not the code under test.
+#
+# Under R CMD check there is no source tree to load: tests run from the
+# .Rcheck directory, and the only available copy is the installed build. The
+# honest options there are to load that build or to skip. Loading it would
+# mean a `library(reactableduckdb)` in the suite, which is precisely the shape
+# that silently accepted a stale install during development, so these tests
+# skip instead. CI runs `make test` against the checked-out tree, where they
+# do run. See the "Validating against the source tree" section of CLAUDE.md.
+skip_without_source_tree <- function() {
+  dir <- tryCatch(
+    normalizePath(testthat::test_path("..", ".."), mustWork = FALSE),
+    error = function(cnd) NA_character_
+  )
+  has_tree <- !is.na(dir) && file.exists(file.path(dir, "DESCRIPTION"))
+  skip_if(
+    !has_tree,
+    "no source tree here (R CMD check); `make test` exercises this"
+  )
+  dir
+}
+
 hostile_names <- c(
   "O'Brien",
   "100%",
@@ -71,8 +95,10 @@ local_backend <- function(n = 2000, ..., env = parent.frame()) {
 # quote_ident(), and !!rlang::sym().
 local_weird_tbl <- function(n = 500, env = parent.frame()) {
   con <- local_duckdb_con(env = env)
-  DBI::dbExecute(con, sprintf(
-    'CREATE TABLE weird AS
+  DBI::dbExecute(
+    con,
+    sprintf(
+      'CREATE TABLE weird AS
      SELECT i AS "order id",
             (i %% 50)::INTEGER AS "1st value",
             \'v\' || (i %% 9) AS "café",
@@ -80,8 +106,9 @@ local_weird_tbl <- function(n = 500, env = parent.frame()) {
             \'x\' || i AS "we""ird",
             \'d\' || i AS "dot.ted"
      FROM range(%d) r(i)',
-    n
-  ))
+      n
+    )
+  )
   dplyr::tbl(con, "weird")
 }
 
@@ -91,11 +118,14 @@ local_duckplyr_source <- function(n = 2000, env = parent.frame()) {
   dir <- withr::local_tempdir(.local_envir = env)
   path <- file.path(dir, "src.parquet")
   con <- DBI::dbConnect(duckdb::duckdb())
-  DBI::dbExecute(con, sprintf(
-    "COPY (%s) TO '%s' (FORMAT PARQUET)",
-    test_table_sql(n),
-    path
-  ))
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY (%s) TO '%s' (FORMAT PARQUET)",
+      test_table_sql(n),
+      path
+    )
+  )
   DBI::dbDisconnect(con, shutdown = TRUE)
   duckplyr::read_parquet_duckdb(path, prudence = "stingy")
 }

@@ -5,23 +5,28 @@
 # design/reactable-server-contract.md section 12.
 
 start_refusal_app <- function(env = parent.frame()) {
+  pkg_dir <- skip_without_source_tree()
   port <- httpuv::randomPort()
   stderr_file <- withr::local_tempfile(.local_envir = env)
   proc <- callr::r_bg(
     function(port, pkg_dir) {
-      tryCatch(
-        library(reactableduckdb),
-        error = function(e) pkgload::load_all(pkg_dir, quiet = TRUE)
-      )
+      # A fresh R session, so it loads the package itself -- unconditionally
+      # from the source tree, never from the library. The assertion turns a
+      # stale copy into a loud failure rather than a wrong result.
+      pkgload::load_all(pkg_dir, quiet = TRUE)
+      stopifnot(pkgload::is_dev_package("reactableduckdb"))
       library(shiny)
       con1 <- DBI::dbConnect(duckdb::duckdb())
       con2 <- DBI::dbConnect(duckdb::duckdb())
       for (con in list(con1, con2)) {
-        DBI::dbExecute(con, "
+        DBI::dbExecute(
+          con,
+          "
           CREATE TABLE t AS
           SELECT i AS id, 'name_' || (i % 97) AS name,
                  (i % 100)::INTEGER AS qty
-          FROM range(2000) r(i)")
+          FROM range(2000) r(i)"
+        )
       }
       b1 <- reactable_duckdb_backend(dplyr::tbl(con1, "t"), key = "id")
       b2 <- reactable_duckdb_backend(dplyr::tbl(con2, "t"), key = "id")
@@ -41,7 +46,7 @@ start_refusal_app <- function(env = parent.frame()) {
       }
       runApp(shinyApp(ui, server), port = port, launch.browser = FALSE)
     },
-    args = list(port = port, pkg_dir = normalizePath(testthat::test_path("..", ".."))),
+    args = list(port = port, pkg_dir = pkg_dir),
     stderr = stderr_file
   )
   withr::defer(proc$kill(), envir = env)
@@ -52,7 +57,11 @@ start_refusal_app <- function(env = parent.frame()) {
       error = function(e) FALSE
     )
     if (up) break
-    if (!proc$is_alive()) stop("app process died: ", paste(readLines(stderr_file, warn = FALSE), collapse = "\n"))
+    if (!proc$is_alive())
+      stop(
+        "app process died: ",
+        paste(readLines(stderr_file, warn = FALSE), collapse = "\n")
+      )
     Sys.sleep(0.2)
   }
   if (!up) stop("app did not come up")
@@ -93,7 +102,9 @@ test_that("refusal through Shiny is HTTP 500 with server-side logging", {
   browser$Page$navigate(app$base_url)
   rendered <- FALSE
   for (i in 1:100) {
-    n <- browser$Runtime$evaluate("document.querySelectorAll('.rt-tr-group').length")$result$value
+    n <- browser$Runtime$evaluate(
+      "document.querySelectorAll('.rt-tr-group').length"
+    )$result$value
     if (!is.null(n) && n > 0) {
       rendered <- TRUE
       break
@@ -104,15 +115,24 @@ test_that("refusal through Shiny is HTTP 500 with server-side logging", {
 
   # A real user interaction: the genuine JS client sends the next-page
   # request. This is the empirical record of the client request shape.
-  browser$Runtime$evaluate("document.querySelectorAll('#tbl .rt-next-button')[0].click()")
+  browser$Runtime$evaluate(
+    "document.querySelectorAll('#tbl .rt-next-button')[0].click()"
+  )
   for (i in 1:50) {
     urls <- vapply(captured, function(r) r$url, character(1))
     if (any(grepl("dataobj/tbl?", urls, fixed = TRUE))) break
     Sys.sleep(0.2)
   }
-  tbl_requests <- captured[grepl("dataobj/tbl?", vapply(captured, function(r) r$url, character(1)), fixed = TRUE)]
+  tbl_requests <- captured[grepl(
+    "dataobj/tbl?",
+    vapply(captured, function(r) r$url, character(1)),
+    fixed = TRUE
+  )]
   expect_gt(length(tbl_requests), 0)
-  client_body <- jsonlite::fromJSON(tbl_requests[[length(tbl_requests)]]$postData, simplifyVector = FALSE)
+  client_body <- jsonlite::fromJSON(
+    tbl_requests[[length(tbl_requests)]]$postData,
+    simplifyVector = FALSE
+  )
   # Observed client shape: pageIndex/pageSize numbers; sortBy/filters/groupBy
   # arrays; expanded/selectedRowIds objects.
   expect_contains(

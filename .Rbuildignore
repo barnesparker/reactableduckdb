@@ -9,6 +9,7 @@
 ^design$
 ^\.github$
 ^README\.Rmd$
+^Makefile$
 ^inst/benchmarks/.*\.(rds|csv|parquet|json)$
 ^LICENSE\.md$
 ^_pkgdown\.yml$

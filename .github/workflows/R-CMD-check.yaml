@@ -52,3 +52,11 @@ jobs:
         with:
           upload-snapshots: true
           # chromote-driven Shiny tests skip automatically without Chrome.
+
+      # R CMD check runs the suite from .Rcheck, where there is no source tree,
+      # so tests that spawn an app process skip there (they must load the
+      # working tree, never an installed copy -- see the "Validating against
+      # the source tree" section of CLAUDE.md). This step runs the suite
+      # against the checked-out tree so those tests are actually exercised.
+      - name: Test against the source tree
+        run: make test
