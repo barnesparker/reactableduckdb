@@ -93,7 +93,17 @@ local_backend <- function(n = 2000, ..., env = parent.frame()) {
 # Non-syntactic column names: spaces, dots, leading digits, unicode,
 # reserved words, embedded quotes. The seam between JSON ids,
 # quote_ident(), and !!rlang::sym().
+#
+# One of the names is non-ASCII, so this fixture needs a UTF-8 locale. Under
+# a C locale R cannot represent the name at all: DuckDB's `café` comes back
+# as the 11-character literal "caf<c3><a9>", which then matches nothing. That
+# is the locale's limitation rather than a defect in the package, so the
+# fixture skips instead of reporting a failure it cannot act on.
 local_weird_tbl <- function(n = 500, env = parent.frame()) {
+  skip_if_not(
+    isTRUE(l10n_info()[["UTF-8"]]),
+    "non-ASCII column names need a UTF-8 locale"
+  )
   con <- local_duckdb_con(env = env)
   DBI::dbExecute(
     con,
