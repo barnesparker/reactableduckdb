@@ -7,8 +7,18 @@ test_that("query log shows only scalar counts and LIMITed page queries", {
   b <- local_backend(n = 2000, key = "id")
   reactableduckdb:::enable_query_log(b)
   server_data(b, pageIndex = 0, pageSize = 50)
-  server_data(b, pageIndex = 2, pageSize = 50, filters = list(list(id = "qty", value = ">=10")))
-  server_data(b, pageIndex = 0, pageSize = 50, sortBy = list(list(id = "amount", desc = TRUE)))
+  server_data(
+    b,
+    pageIndex = 2,
+    pageSize = 50,
+    filters = list(list(id = "qty", value = ">=10"))
+  )
+  server_data(
+    b,
+    pageIndex = 0,
+    pageSize = 50,
+    sortBy = list(list(id = "amount", desc = TRUE))
+  )
 
   log <- query_log(b)
   expect_gt(length(log), 0)
@@ -67,7 +77,12 @@ test_that("a user-owned dbplyr lazy pipeline works end to end", {
     dplyr::select(id, name, grp, qty, revenue)
   b <- reactable_duckdb_backend(lazy, key = "id")
   rd <- server_data(b, filters = list(list(id = "revenue", value = ">=1000")))
-  expect_identical(names(rd$data), c("id", "name", "grp", "qty", "revenue"))
+  # `__state` is the row-identity column appended to every page of a keyed
+  # backend (R/selection.R); the source's own columns follow the pipeline.
+  expect_identical(
+    names(rd$data),
+    c("id", "name", "grp", "qty", "revenue", "__state")
+  )
   reference <- collect_reference(b)
   expect_equal(rd$rowCount, sum(reference$revenue >= 1000))
 })

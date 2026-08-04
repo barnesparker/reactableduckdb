@@ -148,8 +148,9 @@ Unsupported features error at widget construction rather than degrading:
 `server`, `data`, `searchable = TRUE`, `searchMethod`, `groupBy`,
 `pagination = FALSE`, `paginateSubRows = TRUE`, `rownames = TRUE`, a
 `defaultPageSize` or `pageSizeOptions` entry above `max_page_size`, and
-explicitly re-enabling filter/sort on a display-only column. `selection`
-and `details` are allowed but apply to the **current page only**.
+explicitly re-enabling filter/sort on a display-only column. With
+`selection`, `defaultSelected` and `selectionId` are refused too — see
+below.
 
 Oversized page requests at runtime are refused, never clamped. In a live
 Shiny app a refused request surfaces as a failed (HTTP 500) data request
@@ -157,6 +158,53 @@ and the table keeps its previous rows; the app's log carries a structured
 line with the backend's schema hash and the offending column ids (never
 filter values). Debounce filter inputs in production — reactable fires a
 request per keystroke.
+
+## Row selection
+
+`selection` needs the backend to have a `key`. The key becomes each row's
+identity, so a selection follows rows across pages, filters, and sorts
+rather than following positions. Read it with
+`reactable_duckdb_selected_keys()` (the key values) or
+`reactable_duckdb_selected()` (a **lazy** query over just those rows,
+which materializes nothing until the app collects it):
+
+```{r eval=FALSE}
+server <- function(input, output, session) {
+  output$tbl <- reactable::renderReactable(
+    reactable_duckdb(backend, selection = "multiple")
+  )
+
+  selected <- reactable_duckdb_selected(backend)
+
+  output$total <- renderText({
+    # Still a DuckDB query: only this scalar comes back to R.
+    dplyr::pull(dplyr::summarise(selected(), n = dplyr::n()), n)
+  })
+}
+```
+
+Three things to know:
+
+- `reactable::getReactableState()` reports only the selections on the page
+  currently on screen — it resolves row ids against the rows the client is
+  holding. Use `reactable_duckdb_selected_keys()` for the whole selection.
+- With `selection = "multiple"` the header **select-all** checkbox is
+  hidden and disabled. Its handler only ever covers the delivered page, so
+  on a served table it would select one page while presenting itself as
+  having selected everything. Selecting all matching rows is not
+  implementable against reactable's current client; see
+  `design/selection-contract.md`. Set `headerStyle` in a `.selection`
+  `colDef` to put it back.
+- Each selection change costs one data request, and so one page query. The
+  filtered count is served from cache.
+
+The `key` must be `character`, `integer`, `integer64`, or a whole-number
+`double` (DuckDB `BIGINT` arrives as one). Row ids cross to the browser as
+strings, and other types — including `Date` — cannot be recovered from a
+string exactly, so they are refused for `selection` while remaining valid
+sort tie-breakers. A duplicated `key` gives two rows the same identity, so
+selecting one selects both; `validate_key = TRUE` checks uniqueness up
+front.
 
 ## Backend lifecycle, cache, and keys
 

@@ -9,6 +9,12 @@ reference:
   contents:
   - reactable_duckdb_backend
   - reactable_duckdb
+- title: Row selection
+  desc: >
+    Read the rows a user has selected, across every page.
+  contents:
+  - reactable_duckdb_selected
+  - reactable_duckdb_selected_keys
 - title: Package
   contents:
   - reactableduckdb-package

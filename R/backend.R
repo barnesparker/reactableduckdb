@@ -7,13 +7,16 @@ query_log_capacity <- 200L
 
 new_backend_state <- function() {
   state <- new.env(parent = emptyenv())
-  state$cache <- list()          # cache_key -> count
-  state$order <- character(0)    # cache keys, most recently used first
+  state$cache <- list() # cache_key -> count
+  state$order <- character(0) # cache keys, most recently used first
   state$hits <- 0L
   state$misses <- 0L
-  state$log_queries <- FALSE     # test-only switch
+  state$log_queries <- FALSE # test-only switch
   state$query_log <- character(0) # bounded ring, oldest first
   state$query_log_dropped <- 0L
+  # Shiny session token -> list(keys =, rv =). A backend is usually shared by
+  # every session, but a selection belongs to one; see R/selection.R.
+  state$selection <- list()
   state
 }
 
@@ -106,12 +109,14 @@ enable_query_log <- function(backend) {
 #' backend
 #' DBI::dbDisconnect(con, shutdown = TRUE)
 #' @export
-reactable_duckdb_backend <- function(data,
-                                     key = NULL,
-                                     filter_spec = NULL,
-                                     max_page_size = 500L,
-                                     cache_counts = TRUE,
-                                     validate_key = FALSE) {
+reactable_duckdb_backend <- function(
+  data,
+  key = NULL,
+  filter_spec = NULL,
+  max_page_size = 500L,
+  cache_counts = TRUE,
+  validate_key = FALSE
+) {
   warn_reactable_backend_api()
   max_page_size <- check_count(max_page_size, "max_page_size", min = 1)
   check_flag(cache_counts, "cache_counts")
@@ -122,8 +127,21 @@ reactable_duckdb_backend <- function(data,
   check_connection(con)
   base_query <- source_query(source)
   prototype <- source_prototype(source)
+  # `__state` is reactable's per-row state column (R/selection.R). A source
+  # column of that name would collide with the row identity we attach, so it
+  # is refused rather than silently shadowed.
+  if (rowstate_column %in% names(prototype)) {
+    rd_abort(
+      c(
+        "The source has a column named {.val {rowstate_column}}, which reactable reserves for per-row state.",
+        "i" = "Rename or drop it in the source query."
+      ),
+      class = "schema_error"
+    )
+  }
   capability <- build_capability_map(prototype, filter_spec)
 
+  key_kind <- NA_character_
   if (!is.null(key)) {
     if (!is.character(key) || length(key) != 1L || is.na(key)) {
       rd_abort(
@@ -144,6 +162,10 @@ reactable_duckdb_backend <- function(data,
         class = "key_error"
       )
     }
+    # Recorded, not required: a key of an unsupported kind is still a valid
+    # sort tie-breaker. It only rules out selection, which is refused at
+    # widget construction with a message naming the type.
+    key_kind <- selection_key_kind(prototype[[key]])
   }
 
   backend <- structure(
@@ -160,12 +182,17 @@ reactable_duckdb_backend <- function(data,
       ),
       capability = capability,
       key = key,
+      key_kind = key_kind,
       filter_spec = filter_spec,
       max_page_size = max_page_size,
       cache_counts = cache_counts,
       schema_hash = rlang::hash(list(
         names(prototype),
-        vapply(prototype, function(col) paste(class(col), collapse = "/"), character(1))
+        vapply(
+          prototype,
+          function(col) paste(class(col), collapse = "/"),
+          character(1)
+        )
       )),
       state = new_backend_state()
     ),

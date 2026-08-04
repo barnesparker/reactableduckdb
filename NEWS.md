@@ -1,3 +1,38 @@
+# reactableduckdb (development version)
+
+* Row selection previously identified a row by its position within the
+  delivered page, so a selection made on one page also marked the row in that
+  same position on every other page — rows the user never chose, with no error.
+  Pages of a keyed backend now carry reactable's `__state` row-identity column,
+  so selections follow rows across pages, filters, and sorts. The old behaviour
+  was documented as "applies to the current page only", which was never
+  accurate.
+
+* A source column named `__state` is now refused, as it would collide with
+  reactable's per-row state column.
+
+* `reactable_duckdb()` now requires the backend to have a `key` when
+  `selection` is set, and that key must be `character`, `integer`, `integer64`,
+  or a whole-number `double` (DuckDB `BIGINT` arrives as one). Other types stay
+  valid sort tie-breakers but cannot survive the round-trip through the browser
+  as a string row id.
+
+* `reactable_duckdb()` hides and disables the header select-all checkbox for
+  `selection = "multiple"`. Its handler only ever covers the delivered page, so
+  on a served table it selected one page while rendering itself as having
+  selected everything. Override with `headerStyle` in a `.selection` `colDef`.
+
+* `reactable_duckdb()` refuses `defaultSelected` and `selectionId` alongside
+  `selection`: both address rows by index, which on a served table would
+  silently mean "the row whose key is N".
+
+* `reactable_duckdb_selected()` is new. It returns the selected rows as a lazy
+  query, so a selection materializes nothing until the application collects it.
+
+* `reactable_duckdb_selected_keys()` is new. It reports the **complete**
+  selection, including rows on pages that are not on screen — which
+  `reactable::getReactableState()` structurally cannot do.
+
 # reactableduckdb 0.1.0
 
 Initial release.

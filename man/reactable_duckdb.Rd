@@ -46,15 +46,46 @@ wrong results: \code{server}, \code{data}, \code{searchable = TRUE}, \code{searc
 \code{rownames = TRUE}. Display-only columns (LIST/STRUCT/MAP/BLOB) are
 automatically rendered with \verb{filterable = FALSE, sortable = FALSE};
 explicitly re-enabling either in a \code{\link[reactable:colDef]{reactable::colDef()}} for such a
-column is refused.
+column is refused. With \code{selection}, \code{defaultSelected} and \code{selectionId}
+are refused as well — both address rows by index (see below).
 }
 
-\section{Current-page limitations}{
+\section{Row selection}{
 
-\code{selection} and \code{details} (row expansion) are allowed but apply to the
-current page only — reactable's client-side fallback does not span pages.
-Outside a Shiny session the widget renders empty (the prototype); the
-server backend needs a live session to answer data requests.
+\code{selection} requires the backend to have a \code{key}, which becomes each row's
+identity. Selections then follow rows across pages, filters, and sorts, and
+are read with \code{\link[=reactable_duckdb_selected_keys]{reactable_duckdb_selected_keys()}} or
+\code{\link[=reactable_duckdb_selected]{reactable_duckdb_selected()}}.
+
+Two consequences are worth knowing:
+\itemize{
+\item \code{\link[reactable:getReactableState]{reactable::getReactableState()}} reports only the selected rows on the
+page currently on screen — it resolves ids against the rows the client
+holds. Use \code{\link[=reactable_duckdb_selected_keys]{reactable_duckdb_selected_keys()}} for the whole selection.
+\item With \code{selection = "multiple"} the header select-all checkbox is hidden
+and disabled. Its handler only ever covers the delivered page, so on a
+served table it would select one page while presenting itself as having
+selected everything. Selecting all matching rows is not implementable
+against reactable's current client. Set \code{headerStyle} in a \code{.selection}
+\code{\link[reactable:colDef]{reactable::colDef()}} to override.
+}
+
+\code{defaultSelected} and \code{selectionId} address rows by index; a served table's
+ids are \code{key} values, so an index would silently mean "the row whose key is
+N". Both are refused rather than reinterpreted.
+
+A duplicated \code{key} gives two rows the same identity, so selecting one
+selects both. Pass \code{validate_key = TRUE} to
+\code{\link[=reactable_duckdb_backend]{reactable_duckdb_backend()}} to check uniqueness up front.
+
+Each selection change costs one data request, and so one page query; the
+filtered count is served from cache.
+}
+
+\section{Outside Shiny}{
+
+The widget renders empty (the prototype); the server backend needs a live
+session to answer data requests.
 }
 
 \examples{

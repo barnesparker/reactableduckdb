@@ -15,7 +15,10 @@ test_that("quote_ident quotes unconditionally and doubles embedded quotes", {
 test_that("hostile column names execute safely once schema-validated", {
   skip_if_no_backend_api()
   con <- local_duckdb_con()
-  DBI::dbExecute(con, 'CREATE TABLE h AS SELECT i AS "x""; drop", i AS id FROM range(20) r(i)')
+  DBI::dbExecute(
+    con,
+    'CREATE TABLE h AS SELECT i AS "x""; drop", i AS id FROM range(20) r(i)'
+  )
   b <- reactable_duckdb_backend(dplyr::tbl(con, "h"), key = "id")
   rd <- server_data(b, sortBy = list(list(id = 'x"; drop', desc = TRUE)))
   expect_identical(nrow(rd$data), 10L)
@@ -23,7 +26,9 @@ test_that("hostile column names execute safely once schema-validated", {
 
 test_that("unknown identifiers are refused before reaching the wrapper", {
   clauses <- reactableduckdb:::build_order_clauses
-  capability <- list(id = list(filterable = TRUE, sortable = TRUE, r_type = "numeric"))
+  capability <- list(
+    id = list(filterable = TRUE, sortable = TRUE, r_type = "numeric")
+  )
   expect_error(
     clauses(list(list(id = "nope", desc = FALSE)), NULL, capability),
     class = "reactableduckdb_sort_error"
@@ -64,7 +69,8 @@ test_that("reactable_duckdb refuses incompatible arguments", {
 
 test_that("allowed arguments still pass through", {
   skip_if_no_backend_api()
-  b <- local_backend(n = 100)
+  # `selection` needs a key, so this backend has one.
+  b <- local_backend(n = 100, key = "id")
   w <- reactable_duckdb(
     b,
     filterable = TRUE,

@@ -68,8 +68,12 @@ source_filtered_query <- function(backend, predicates) {
 # Materialization 2 of 3: the scalar filtered count. The already-built
 # `filtered` query is passed in — never reconstructed from the filters — so
 # the count and the page cannot diverge. `cache_key` is only a cache key.
-source_count <- function(backend, filtered, cache_key,
-                         call = rlang::caller_env()) {
+source_count <- function(
+  backend,
+  filtered,
+  cache_key,
+  call = rlang::caller_env()
+) {
   compute <- function() {
     sql <- duckdb_count_sql(render_sql(filtered))
     result <- run_query(backend, sql, call = call)
@@ -84,8 +88,14 @@ source_count <- function(backend, filtered, cache_key,
 }
 
 # Materialization 3 of 3: the requested page, via the isolated wrapper.
-source_page <- function(backend, filtered, sort_by, page_index, page_size,
-                        call = rlang::caller_env()) {
+source_page <- function(
+  backend,
+  filtered,
+  sort_by,
+  page_index,
+  page_size,
+  call = rlang::caller_env()
+) {
   params <- check_page_params(
     page_index,
     page_size,
@@ -105,5 +115,9 @@ source_page <- function(backend, filtered, sort_by, page_index, page_size,
     params$offset,
     call = call
   )
-  run_query(backend, sql, call = call)
+  page <- run_query(backend, sql, call = call)
+  # Row identity travels with the page, not as a fourth query: the ids are the
+  # key column already present in it, and the index is arithmetic on the
+  # offset. See R/selection.R.
+  attach_row_state(backend, page, params$offset, call = call)
 }
