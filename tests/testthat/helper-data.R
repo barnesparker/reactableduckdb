@@ -74,8 +74,19 @@ test_table_sql <- function(n) {
   )
 }
 
+# duckdb >= 1.5.5 prints a one-time note on the first connection of a session
+# saying where it will keep downloaded extensions, unless it is told which home
+# to use. It is harmless, but it lands in whichever expect_snapshot() happens to
+# open that first connection -- so which test it breaks depends on test order,
+# and it never appears on a machine that already has a ~/.duckdb. Silence it at
+# the source. `shared_home` does not exist before 1.5.5, which is also the
+# version that introduced the message, so the guard covers both.
 local_duckdb_con <- function(env = parent.frame()) {
-  con <- DBI::dbConnect(duckdb::duckdb())
+  args <- list()
+  if ("shared_home" %in% names(formals(duckdb::duckdb))) {
+    args$shared_home <- FALSE
+  }
+  con <- DBI::dbConnect(do.call(duckdb::duckdb, args))
   withr::defer(DBI::dbDisconnect(con, shutdown = TRUE), envir = env)
   con
 }

@@ -96,9 +96,12 @@ test_that("a source column named __state is refused", {
 
 test_that("selection requires a key of a round-trippable type", {
   skip_if_no_backend_api()
+  # Build the backend outside the snapshot: a snapshot should capture the
+  # error under test, never incidental setup output.
+  keyless <- local_backend(n = 50)
   expect_snapshot(
     error = TRUE,
-    reactable_duckdb(local_backend(n = 50), selection = "multiple")
+    reactable_duckdb(keyless, selection = "multiple")
   )
   con <- local_duckdb_con()
   DBI::dbExecute(

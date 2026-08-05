@@ -58,7 +58,7 @@
 # selection requires a key of a round-trippable type
 
     Code
-      reactable_duckdb(local_backend(n = 50), selection = "multiple")
+      reactable_duckdb(keyless, selection = "multiple")
     Condition
       Error in `reactable_duckdb()`:
       ! `selection` requires the backend to have a `key`.
