@@ -63,9 +63,63 @@ reactableduckdb proves nothing about the code you just changed.
 - `tests/testthat.R` is R CMD check's entry point and the sole sanctioned `library()` call.
   R CMD check installs a build of *this* tree, so it is not a stale copy. Do not use it as
   a development loop.
+- **`make coverage` is sanctioned for the same reason.** covr runs
+  `R CMD INSTALL --install-tests` into a temporary library and then
+  `tools::testInstalledPackage()`, so it too goes through `tests/testthat.R` and
+  `library()`. What it installs is a fresh build of *this* tree, which puts it in the
+  R CMD check category, not the stale-copy category. It is a measurement tool, never a
+  development loop — `make test` remains the only way to validate a change.
 
 `tests/testthat/test-source-tree.R` enforces the first and fourth bullets and asserts the
 suite is running against a dev package. If it fails, fix the loading, not the test.
+
+**A DESCRIPTION is not proof of a source tree.** An installed package directory has one
+too, and covr's layout puts an installed package root exactly where
+`test_path("..", "..")` lands. `skip_without_source_tree()` therefore also requires `R/`
+to contain `.R` files. Any future "are we in the source tree?" check must use the same
+discriminator; DESCRIPTION alone silently hands an installed build to `pkgload::load_all()`.
+
+## Test coverage
+
+`make coverage` prints per-file coverage; `make coverage-report` opens the HTML report.
+Read the number with three things in mind:
+
+- **The browser-driven tests cannot run under covr at all.** They require the source tree,
+  and covr tests an installed build, so `skip_without_source_tree()` skips them by design.
+  `R/selection.R` is understated as a result. Do not close that gap by weakening those
+  tests — they are the only check that reactable still honours the undocumented `__state`
+  row-identity hook. CI's `make test` step is where they actually run.
+- **`make coverage` sets `NOT_CRAN=true` on purpose.** covr does not go through
+  `testthat::test_local()`, which is what normally sets it, and every `expect_snapshot()`
+  is `cran = FALSE` — without it the selection error paths silently drop out of the
+  measurement.
+- **A few guards are deliberately unreachable** and stay uncovered rather than being
+  hidden behind `# nocov`: an uncovered defensive branch is honest, a suppressed one is
+  invisible. `R/filters.R`'s `type == "none"` guard is the clearest example — it is
+  documented in the source as unreachable once ids are capability-checked.
+
+Coverage is a map of what the suite does not reach, not a score to raise. A test written
+only to colour a line green is worse than the uncovered line.
+
+CI uploads coverage to Codecov, which is what the README badge reads. That workflow is
+`.github/workflows/test-coverage.yaml`.
+
+## Pandoc is installed — it ships inside Quarto
+
+`rmarkdown::pandoc_available()` returns `FALSE` under a bare `Rscript`, and `R CMD check`
+then fails to build the vignette. **Pandoc is not missing.** Quarto bundles it, and R
+locates pandoc through `RSTUDIO_PANDOC` — which RStudio sets and a plain `Rscript` does
+not. On this machine it lives at `/Applications/quarto/bin/tools/aarch64` (Quarto also
+ships an `x86_64` build alongside it).
+
+The `Makefile` detects it, so `make check` works. Only a direct `Rscript`/`devtools` call
+outside `make` needs it set by hand:
+
+```bash
+RSTUDIO_PANDOC=/Applications/quarto/bin/tools/aarch64 Rscript -e 'devtools::check()'
+```
+
+Do not conclude from a vignette build failure that pandoc needs installing.
 
 ## Design documents (authoritative)
 

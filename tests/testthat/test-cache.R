@@ -76,18 +76,45 @@ test_that("cache_counts = FALSE bypasses the cache entirely", {
   expect_length(count_queries, 2)
 })
 
-test_that("the LRU cache is bounded and evicts the least recently used", {
+test_that("the LRU cache is bounded", {
   skip_if_no_backend_api()
   b <- local_backend(n = 500)
   cap <- reactableduckdb:::count_cache_capacity
+  # Every value must be distinct, or the cache never fills and the bound is
+  # never tested. `i %% 100` yields only 100 of them, which is exactly `cap`.
   for (i in seq_len(cap + 5)) {
-    server_data(
-      b,
-      filters = list(list(id = "qty", value = paste0(">=", i %% 100)))
-    )
+    server_data(b, filters = list(list(id = "qty", value = paste0(">=", i))))
   }
-  expect_lte(length(b$state$cache), cap)
+  expect_identical(length(b$state$cache), cap)
   expect_identical(length(b$state$order), length(b$state$cache))
+})
+
+test_that("the cache evicts the least recently used key, not the oldest", {
+  skip_if_no_backend_api()
+  # Drives cache_fetch() directly: filling a real backend past capacity costs
+  # `cap` queries per assertion, and the policy is the thing under test.
+  state <- reactableduckdb:::new_backend_state()
+  fetch <- reactableduckdb:::cache_fetch
+  cap <- reactableduckdb:::count_cache_capacity
+
+  for (i in seq_len(cap)) {
+    fetch(state, paste0("k", i), function() i)
+  }
+  expect_identical(length(state$cache), cap)
+
+  # Touch the oldest key. Under LRU that rescues it; under FIFO it would not.
+  expect_identical(fetch(state, "k1", function() stop("should be a hit")), 1L)
+
+  # One more insert forces exactly one eviction.
+  fetch(state, "new", function() -1)
+  expect_identical(length(state$cache), cap)
+  expect_true("new" %in% names(state$cache))
+  # k1 was just used, so k2 -- now the least recently used -- is what goes.
+  expect_true("k1" %in% names(state$cache))
+  expect_false("k2" %in% names(state$cache))
+  # ...and the recency list stays in step with the cache it describes.
+  expect_setequal(state$order, names(state$cache))
+  expect_identical(state$order[[1]], "new")
 })
 
 test_that("warmed count from reactableServerInit makes construction a hit", {

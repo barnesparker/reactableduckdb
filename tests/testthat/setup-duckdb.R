@@ -23,3 +23,12 @@ if (requireNamespace("duckdb", quietly = TRUE)) {
     }
   })
 }
+
+# duckplyr's fallback notice ("Number of reports ready for upload: N") cannot
+# be silenced from here. It is emitted by an on-load hook, so it has already
+# printed by the time any setup file runs, and its header is unconditional --
+# neither DUCKPLYR_FALLBACK_COLLECT nor DUCKPLYR_FALLBACK_INFO suppresses it
+# (both checked). The only levers are duckplyr::fallback_config(), which
+# persists settings to the developer's own machine rather than the project, and
+# wrapping the whole run in suppressMessages(), which would hide real output
+# too. It is noise in the test log and nothing more; left alone deliberately.

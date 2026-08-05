@@ -37,7 +37,17 @@ test_that("unknown identifiers are refused before reaching the wrapper", {
     clauses(list(list(id = '"; DROP', desc = FALSE)), NULL, capability),
     class = "reactableduckdb_sort_error"
   )
+  # A sortBy that is not a list at all, as opposed to a list of bad entries.
+  expect_error(
+    clauses("id", NULL, capability),
+    class = "reactableduckdb_sort_error"
+  )
+  # No sort at all is not an error; it is simply no ORDER BY.
+  expect_identical(clauses(NULL, NULL, capability), character(0))
 })
+
+# check_column_id()'s own shape validation is unit-tested in test-validation.R;
+# what matters here is that an unknown identifier never reaches the wrapper.
 
 # Constructor refusals (plan section 4a) --------------------------------------
 

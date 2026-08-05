@@ -21,17 +21,65 @@ skip_if_no_backend_api <- function() {
 # that silently accepted a stale install during development, so these tests
 # skip instead. CI runs `make test` against the checked-out tree, where they
 # do run. See the "Validating against the source tree" section of CLAUDE.md.
+#
+# A DESCRIPTION two levels up is NOT enough to prove a source tree: an
+# *installed* package directory has one too, and covr runs the suite from
+# `<lib>/reactableduckdb/reactableduckdb-tests/testthat/`, which puts an
+# installed package root exactly there. Handing that to pkgload::load_all()
+# would kill the spawned app process for the wrong reason. A source tree also
+# has R/*.R; an installed one has only R/<pkg>.rdb and friends, so that is the
+# discriminator.
+has_source_tree <- function(dir) {
+  !is.na(dir) &&
+    file.exists(file.path(dir, "DESCRIPTION")) &&
+    length(list.files(file.path(dir, "R"), pattern = "[.][Rr]$")) > 0
+}
+
 skip_without_source_tree <- function() {
   dir <- tryCatch(
     normalizePath(testthat::test_path("..", ".."), mustWork = FALSE),
     error = function(cnd) NA_character_
   )
-  has_tree <- !is.na(dir) && file.exists(file.path(dir, "DESCRIPTION"))
   skip_if(
-    !has_tree,
-    "no source tree here (R CMD check); `make test` exercises this"
+    !has_source_tree(dir),
+    "no source tree here (R CMD check / covr); `make test` exercises this"
   )
   dir
+}
+
+# The browser-driven tests are the only check that reactable's undocumented
+# `__state` row-identity hook still exists. If it disappears upstream, every
+# R-level test still passes while the client silently reverts to identifying
+# rows by their position in the delivered page.
+#
+# So a missing Chrome is a skip on a developer machine, but a *failure* on CI:
+# a test with seven independent ways to skip itself needs at least one place
+# where it cannot go quietly dark. CI is that place.
+on_ci <- function() {
+  isTRUE(as.logical(Sys.getenv("CI", "false")))
+}
+
+local_chromote_session <- function(env = parent.frame()) {
+  session <- tryCatch(
+    chromote::ChromoteSession$new(),
+    error = function(cnd) cnd
+  )
+  if (inherits(session, "condition")) {
+    reason <- conditionMessage(session)
+    if (on_ci()) {
+      stop(
+        "chromote could not start a Chrome session on CI, so the browser ",
+        "tests would have skipped silently. These tests are load-bearing: ",
+        "they are the only check that reactable still honours the `__state` ",
+        "row-identity hook. Original error: ",
+        reason,
+        call. = FALSE
+      )
+    }
+    skip(paste0("chromote could not start a Chrome session: ", reason))
+  }
+  withr::defer(session$close(), envir = env)
+  session
 }
 
 hostile_names <- c(

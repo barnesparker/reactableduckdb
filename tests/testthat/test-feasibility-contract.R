@@ -73,6 +73,34 @@ test_that("a present backend API is silent", {
   )
 })
 
+test_that("detection reports FALSE when reactable exports are missing", {
+  # Detection must fail closed on a genuinely missing API, not error. Mocking
+  # the export list is the only way to reach this branch with a working
+  # reactable installed.
+  testthat::local_mocked_bindings(
+    getNamespaceExports = function(...) character(0),
+    .package = "base"
+  )
+  expect_false(reactableduckdb:::has_reactable_backend_api())
+})
+
+test_that("attaching the package announces a missing backend API", {
+  testthat::local_mocked_bindings(
+    has_reactable_backend_api = function() FALSE
+  )
+  expect_message(
+    reactableduckdb:::.onAttach("lib", "reactableduckdb"),
+    "development version"
+  )
+
+  testthat::local_mocked_bindings(
+    has_reactable_backend_api = function() TRUE
+  )
+  expect_no_message(
+    reactableduckdb:::.onAttach("lib", "reactableduckdb")
+  )
+})
+
 test_that("resolvedData enforces its recorded guards", {
   skip_if_no_backend_api()
   expect_error(

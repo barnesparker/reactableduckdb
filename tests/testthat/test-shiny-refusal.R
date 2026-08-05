@@ -86,9 +86,10 @@ test_that("refusal through Shiny is HTTP 500 with server-side logging", {
   for (pkg in c("shiny", "callr", "httr2", "chromote", "pkgload")) {
     skip_if_not_installed(pkg)
   }
-  browser <- tryCatch(chromote::ChromoteSession$new(), error = function(e) NULL)
-  if (is.null(browser)) skip("chromote could not start a Chrome session")
-  withr::defer(browser$close())
+  # The source-tree check first: it is free, and starting Chrome only to skip
+  # on the next line wastes the most expensive setup in the suite.
+  skip_without_source_tree()
+  browser <- local_chromote_session()
 
   app <- start_refusal_app()
 
@@ -169,16 +170,28 @@ test_that("refusal through Shiny is HTTP 500 with server-side logging", {
   expect_identical(oversized$status, 500L)
 
   # Invalidated connection: kill con2 in the live app, then a previously
-  # valid request 500s.
+  # valid request 500s. Poll for the observer to have run rather than sleeping
+  # a fixed interval; the expectation below still reports the real status if
+  # it never does.
   browser$Runtime$evaluate("document.getElementById('kill').click()")
-  Sys.sleep(1)
-  dead <- post_json(tbl2_url, '{"pageIndex":0,"pageSize":5}')
+  dead <- NULL
+  for (i in 1:100) {
+    dead <- post_json(tbl2_url, '{"pageIndex":0,"pageSize":5}')
+    if (identical(dead$status, 500L)) break
+    Sys.sleep(0.1)
+  }
   expect_identical(dead$status, 500L)
 
   # The log-and-rethrow wrapper put the story in the app's stderr: our
   # structured lines with the schema hash and ids-only request summary.
-  Sys.sleep(0.5)
-  logs <- paste(readLines(app$stderr_file, warn = FALSE), collapse = "\n")
+  read_logs <- function() {
+    paste(readLines(app$stderr_file, warn = FALSE), collapse = "\n")
+  }
+  for (i in 1:100) {
+    if (grepl("no longer valid", read_logs())) break
+    Sys.sleep(0.1)
+  }
+  logs <- read_logs()
   expect_match(logs, "reactableduckdb request failed")
   expect_match(logs, "Unknown filter column", fixed = TRUE)
   expect_match(logs, "filter_ids=[nope]", fixed = TRUE)

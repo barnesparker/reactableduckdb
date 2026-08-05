@@ -47,47 +47,57 @@ test_that("duckdb_page_sql refuses malformed inputs", {
   )
 })
 
-test_that("check_page_params validates and never clamps", {
-  check <- reactableduckdb:::check_page_params
-  expect_identical(check(0, 50, 500), list(limit = 50, offset = 0))
-  expect_identical(check(3, 25, 500), list(limit = 25, offset = 75))
-  expect_error(check(-1, 10, 500), class = "reactableduckdb_page_error")
-  expect_error(check(0.5, 10, 500), class = "reactableduckdb_page_error")
-  expect_error(check(0, 0, 500), class = "reactableduckdb_page_error")
-  expect_error(check(0, NA, 500), class = "reactableduckdb_page_error")
-  expect_error(check(0, 501, 500), class = "reactableduckdb_page_error")
-  expect_error(check(2^45, 500, 500), class = "reactableduckdb_page_error")
-})
+# check_page_params(), which gates every one of these, is unit-tested in
+# test-validation.R alongside the other validators.
 
 # Functional pages ------------------------------------------------------------
 
-test_that("first, middle, final-partial, beyond, and zero-row pages work", {
+# One page shape per test: a failure then names the shape that broke rather
+# than reporting that "pages" are broken.
+
+test_that("the first page starts at the first row and reports the full count", {
   skip_if_no_backend_api()
   b <- local_backend(n = 2000, key = "id")
-
   first <- server_data(b, pageIndex = 0, pageSize = 150)
   expect_identical(nrow(first$data), 150L)
   expect_identical(first$data$id[1:3], c(0, 1, 2))
   expect_identical(first$rowCount, 2000)
+})
 
+test_that("a middle page starts at its offset", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 2000, key = "id")
   middle <- server_data(b, pageIndex = 5, pageSize = 150)
   expect_identical(middle$data$id[[1]], 750)
+})
 
+test_that("the final page is short rather than padded", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 2000, key = "id")
   # 2000 rows / 150 per page: the 14th page holds the last 50 rows.
   last <- server_data(b, pageIndex = 13, pageSize = 150)
   expect_identical(nrow(last$data), 50L)
   expect_identical(last$data$id[[50]], 1999)
+})
 
+test_that("a page past the end is empty but still counts the whole source", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 2000, key = "id")
   beyond <- server_data(b, pageIndex = 100, pageSize = 150)
   expect_identical(nrow(beyond$data), 0L)
   expect_identical(beyond$rowCount, 2000)
+})
 
+test_that("a filter matching nothing yields a zero-row page with the schema", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 2000, key = "id")
   none <- server_data(
     b,
     filters = list(list(id = "name", value = "no such value anywhere"))
   )
   expect_identical(nrow(none$data), 0L)
   expect_identical(none$rowCount, 0)
+  # The columns must still be there: reactable renders from the page's shape.
   expect_identical(names(none$data), b$columns)
 })
 

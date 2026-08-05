@@ -1,0 +1,81 @@
+# Derived from https://github.com/r-lib/actions/tree/v2/examples, with three
+# changes this package needs:
+#
+#   * reactable must be the development build exporting the custom server
+#     backend API, pinned to the same SHA as R-CMD-check.yaml. The stock
+#     workflow knows nothing about it.
+#   * NOT_CRAN is set. covr runs the suite through tests/testthat.R rather than
+#     testthat::test_local(), which is what normally sets it, and every
+#     expect_snapshot() is `cran = FALSE` -- without it the selection error
+#     paths silently drop out of the measurement. `make coverage` does the same
+#     thing locally.
+#   * No Chrome. The browser-driven tests cannot run under covr at all: it
+#     measures an installed build and they require the source tree, so
+#     skip_without_source_tree() skips them. R/selection.R is understated here
+#     by design; R-CMD-check.yaml's `make test` step is where they run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+name: test-coverage
+
+permissions: read-all
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      NOT_CRAN: true
+      # Pinned in renv.lock and design/reactable-server-contract.md.
+      REACTABLE_DEV_REF: glin/reactable@4a438397eaa83ec71a4dc3e895bbdcc595232d78
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::covr
+            any::xml2
+            ${{ env.REACTABLE_DEV_REF }}
+          needs: coverage
+
+      - name: Test coverage
+        run: |
+          cov <- covr::package_coverage(
+            quiet = FALSE,
+            clean = FALSE,
+            install_path = file.path(normalizePath(Sys.getenv("RUNNER_TEMP"), winslash = "/"), "package")
+          )
+          print(cov)
+          covr::to_cobertura(cov)
+        shell: Rscript {0}
+
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          # Fail if error if not on PR, or if on PR and token is given
+          fail_ci_if_error: ${{ github.event_name != 'pull_request' || secrets.CODECOV_TOKEN }}
+          files: ./cobertura.xml
+          plugins: noop
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Show testthat output
+        if: always()
+        run: |
+          ## --------------------------------------------------------------------
+          find '${{ runner.temp }}/package' -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-test-failures
+          path: ${{ runner.temp }}/package

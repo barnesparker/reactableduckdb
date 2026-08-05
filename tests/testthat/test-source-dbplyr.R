@@ -37,6 +37,11 @@ test_that("query log shows only scalar counts and LIMITed page queries", {
 test_that("page allocation stays under an absolute ceiling at any source size", {
   skip_if_no_backend_api()
   skip_if_not_installed("bench")
+  # Under covr every traced expression allocates, so mem_alloc would measure
+  # the instrumentation rather than the package -- a false failure at best and
+  # a meaningless pass at worst. This is also the most expensive test in the
+  # suite to run instrumented (two 250,000-row tables).
+  skip_on_covr()
   measure_page <- function(n) {
     tbl <- local_duckdb_tbl(n = n)
     b <- reactable_duckdb_backend(tbl, key = "id")
@@ -44,7 +49,13 @@ test_that("page allocation stays under an absolute ceiling at any source size", 
     result <- bench::mark(
       server_data(b, pageIndex = 1, pageSize = 50),
       iterations = 1,
-      check = FALSE
+      check = FALSE,
+      # bench::mark() drops iterations that garbage collected, and warns
+      # ("Some expressions had a GC in every iteration") when that leaves it
+      # nothing. Whether it fires depends on GC timing, so it made the suite's
+      # warning count nondeterministic. There is one iteration and only
+      # mem_alloc is read, so filtering has nothing to contribute here.
+      filter_gc = FALSE
     )
     as.numeric(result$mem_alloc)
   }

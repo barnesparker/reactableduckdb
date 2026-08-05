@@ -5,6 +5,9 @@
 
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![R-CMD-check](https://github.com/barnesparker/reactableduckdb/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/barnesparker/reactableduckdb/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/barnesparker/reactableduckdb/graph/badge.svg)](https://app.codecov.io/gh/barnesparker/reactableduckdb)
 <!-- badges: end -->
 
 reactableduckdb streams a lazy DuckDB query — a
@@ -31,9 +34,9 @@ pak::pak("glin/reactable")
 # or: remotes::install_github("glin/reactable")
 ```
 
-If you work behind a **Posit Package Manager** instance that mirrors that
-GitHub repository, that route works equally well and needs no GitHub
-access:
+If you work behind a **Posit Package Manager** instance that mirrors
+that GitHub repository, that route works equally well and needs no
+GitHub access:
 
 ``` r
 install.packages("reactable", repos = "<your Posit Package Manager URL>")

@@ -52,6 +52,27 @@ test_that("no test file loads reactableduckdb itself", {
   expect_identical(offenders, character(0))
 })
 
+test_that("an installed package directory does not read as a source tree", {
+  # skip_without_source_tree() decides whether a spawned app process may
+  # pkgload::load_all() a directory. An installed package root has a
+  # DESCRIPTION, so DESCRIPTION alone cannot be the test -- covr runs the
+  # suite from inside one. Any installed package is a fine stand-in.
+  installed <- find.package("testthat")
+  expect_true(file.exists(file.path(installed, "DESCRIPTION")))
+  expect_false(has_source_tree(installed))
+
+  # ...and the real tree still passes. Only meaningful when there *is* one:
+  # under R CMD check and under covr the suite runs from an installed build,
+  # and covr's layout in particular puts an installed package root exactly
+  # where this looks -- which is the whole reason the check above exists.
+  skip_if(
+    testthat::is_checking(),
+    "running from an installed build (R CMD check / covr), so there is no tree here"
+  )
+  source_tree <- normalizePath(test_path("..", ".."), mustWork = FALSE)
+  expect_true(has_source_tree(source_tree))
+})
+
 test_that("no test file falls back to load_all only when loading fails", {
   files <- list.files(test_path(), pattern = "[.][Rr]$", full.names = TRUE)
   offenders <- character(0)

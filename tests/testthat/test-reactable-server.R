@@ -128,6 +128,22 @@ test_that("display-only columns get filterable/sortable FALSE automatically", {
   expect_false(tags_col$sortable)
 })
 
+test_that("a fully filterable schema passes no columns list at all", {
+  skip_if_no_backend_api()
+  con <- local_duckdb_con()
+  # No LIST/STRUCT column, so nothing is display-only and there is nothing for
+  # the package to say about any column. It must then leave `columns` alone
+  # rather than sending reactable an empty list.
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE plain AS SELECT i AS id, 'n' || i AS name FROM range(20) r(i)"
+  )
+  b <- reactable_duckdb_backend(dplyr::tbl(con, "plain"), key = "id")
+  expect_null(reactableduckdb:::build_widget_columns(b, NULL))
+  w <- reactable_duckdb(b, filterable = TRUE)
+  expect_s3_class(w, "reactable")
+})
+
 test_that("cosmetic user colDefs merge over capability defaults", {
   skip_if_no_backend_api()
   b <- local_backend(n = 100)

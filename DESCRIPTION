@@ -35,6 +35,8 @@ Suggests:
     bslib,
     callr,
     chromote,
+    covr,
+    DT,
     duckdb,
     httpuv,
     httr2,
@@ -43,6 +45,7 @@ Suggests:
     pins,
     pkgload,
     rmarkdown,
+    RSQLite,
     shiny,
     testthat (>= 3.0.0),
     withr
