@@ -87,20 +87,34 @@ test_that("the numeric grammar covers the documented forms", {
   skip_if_no_backend_api()
   b <- local_backend(n = 2000)
   reference <- collect_reference(b)
+  # Each case names its own column. Deriving it from the value (the old
+  # `if (grepl("1.5", ...))`) meant the string under test silently decided
+  # what was being tested.
   cases <- list(
-    list("10", reference$qty == 10),
-    list("1.5", reference$amount == 1.5),
-    list(" >= 90 ", reference$qty >= 90),
-    list("<=5", reference$qty <= 5),
-    list(">98", reference$qty > 98),
-    list("<2", reference$qty < 2),
-    list("10..20", reference$qty >= 10 & reference$qty <= 20),
-    list("1e2..2e2", reference$qty >= 100 & reference$qty <= 200)
+    list(col = "qty", value = "10", expected = reference$qty == 10),
+    list(col = "amount", value = "1.5", expected = reference$amount == 1.5),
+    list(col = "qty", value = " >= 90 ", expected = reference$qty >= 90),
+    list(col = "qty", value = "<=5", expected = reference$qty <= 5),
+    list(col = "qty", value = ">98", expected = reference$qty > 98),
+    list(col = "qty", value = "<2", expected = reference$qty < 2),
+    list(
+      col = "qty",
+      value = "10..20",
+      expected = reference$qty >= 10 & reference$qty <= 20
+    ),
+    list(
+      col = "qty",
+      value = "1e2..2e2",
+      expected = reference$qty >= 100 & reference$qty <= 200
+    )
   )
   for (case in cases) {
-    col <- if (grepl("1.5", case[[1]], fixed = TRUE)) "amount" else "qty"
-    rd <- filter_one(b, col, case[[1]])
-    expect_equal(rd$rowCount, sum(case[[2]]), info = case[[1]])
+    rd <- filter_one(b, case$col, case$value)
+    expect_equal(
+      rd$rowCount,
+      sum(case$expected),
+      info = paste(case$col, case$value)
+    )
   }
 })
 
@@ -179,6 +193,73 @@ test_that("impossible calendar dates are refused", {
   }
 })
 
+test_that("malformed datetimes are refused", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 200)
+  bad_values <- c(
+    "not-a-datetime",
+    "2026-02-30 12:00:00", # impossible calendar day
+    "12:00:00", # time with no date
+    "2026-01-02..2026-01-01" # inverted range
+  )
+  for (bad in bad_values) {
+    expect_error(
+      filter_one(b, "ts", bad),
+      class = "reactableduckdb_filter_error",
+      info = bad
+    )
+  }
+})
+
+test_that("an out-of-range time is refused, never truncated to midnight", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 2000)
+  # A loose time pattern let these through: as.POSIXct()'s tryFormats chain
+  # falls back to "%Y-%m-%d", strptime matches that as a prefix, and the value
+  # silently became midnight on the date -- filtering against an instant the
+  # user never typed. Refusal is the only correct answer.
+  for (bad in c(
+    "2026-01-01 25:00:00",
+    "2026-01-01 12:99:00",
+    "2026-01-01 12:00:99",
+    ">=2026-01-01 24:00:00",
+    "2026-01-01 99:99:99"
+  )) {
+    expect_error(
+      filter_one(b, "ts", bad),
+      class = "reactableduckdb_filter_error",
+      info = bad
+    )
+  }
+
+  # The boundary values on either side of each range still parse.
+  reference <- collect_reference(b)
+  midnight <- filter_one(b, "ts", ">=2026-01-01 00:00:00")
+  expect_equal(midnight$rowCount, nrow(reference))
+  expect_error(filter_one(b, "ts", "2026-01-01 23:59:59"), NA)
+  # The T separator is unaffected.
+  expect_error(filter_one(b, "ts", ">=2026-01-01T23:59:59"), NA)
+})
+
+test_that("blank non-text filters mean no filter, and non-scalars are refused", {
+  skip_if_no_backend_api()
+  b <- local_backend(n = 2000)
+  # Whitespace is "no filter" for every non-text type -- text keeps it, since
+  # for text a space is a legitimate character to search for.
+  expect_identical(filter_one(b, "qty", "   ")$rowCount, 2000)
+  expect_identical(filter_one(b, "dt", "")$rowCount, 2000)
+
+  # Values arrive from parsed JSON, so a scalar cannot be assumed.
+  expect_error(
+    filter_one(b, "qty", c("1", "2")),
+    class = "reactableduckdb_filter_error"
+  )
+  expect_error(
+    filter_one(b, "qty", NA_character_),
+    class = "reactableduckdb_filter_error"
+  )
+})
+
 # Logical ---------------------------------------------------------------------
 
 test_that("logical filters accept the documented spellings", {
@@ -228,6 +309,99 @@ test_that("malformed filter requests are refused", {
   )
 })
 
+test_that("filter_spec type reaches the capability map", {
+  skip_if_no_backend_api()
+  tbl <- local_duckdb_tbl(n = 2000)
+  pinned <- reactable_duckdb_backend(
+    tbl,
+    filter_spec = list(qty = list(type = "numeric"))
+  )
+  expect_identical(pinned$capability$qty$type, "numeric")
+  expect_identical(filter_one(pinned, "qty", "10")$rowCount, 20)
+  expect_gt(filter_one(pinned, "qty", ">=90")$rowCount, 0)
+})
+
+test_that("a timestamp column can be pinned to date granularity", {
+  skip_if_no_backend_api()
+  tbl <- local_duckdb_tbl(n = 2000)
+  reference <- DBI::dbGetQuery(
+    dbplyr::remote_con(tbl),
+    dbplyr::sql_render(tbl) |> as.character()
+  )
+
+  # DATE and TIMESTAMP compare freely in DuckDB, so this is the one cross-type
+  # pin that is both valid and useful: users type a plain date at a timestamp
+  # column instead of a full datetime.
+  as_date <- reactable_duckdb_backend(
+    tbl,
+    filter_spec = list(ts = list(type = "date"))
+  )
+  expect_identical(as_date$capability$ts$type, "date")
+  rd <- filter_one(as_date, "ts", ">=2026-01-05")
+  expect_equal(
+    rd$rowCount,
+    sum(reference$ts >= as.POSIXct("2026-01-05", tz = "UTC"))
+  )
+  # ...and the datetime grammar is no longer what the column parses with.
+  expect_error(
+    filter_one(as_date, "ts", ">=2026-01-05 12:00:00"),
+    class = "reactableduckdb_filter_error"
+  )
+
+  # The reverse pin is equally valid: a DATE column read at datetime precision.
+  as_datetime <- reactable_duckdb_backend(
+    tbl,
+    filter_spec = list(dt = list(type = "datetime"))
+  )
+  expect_gt(filter_one(as_datetime, "dt", ">=2026-01-05 00:00:00")$rowCount, 0)
+})
+
+test_that("a type pin the column's SQL type cannot evaluate is refused", {
+  skip_if_no_backend_api()
+  tbl <- local_duckdb_tbl(n = 50)
+  # Each of these built a predicate DuckDB could not bind, so the failure
+  # surfaced as a raw binder error mid-request instead of a refusal here.
+  # `qty` -> logical was worse: it bound fine and returned a surprising set.
+  incompatible <- list(
+    list(qty = list(type = "text")),
+    list(qty = list(type = "date")),
+    list(qty = list(type = "datetime")),
+    list(qty = list(type = "logical")),
+    list(name = list(type = "numeric")),
+    list(name = list(type = "date")),
+    list(name = list(type = "logical")),
+    list(dt = list(type = "text")),
+    list(dt = list(type = "numeric")),
+    list(flag = list(type = "numeric")),
+    list(flag = list(type = "text"))
+  )
+  for (spec in incompatible) {
+    expect_error(
+      reactable_duckdb_backend(tbl, filter_spec = spec),
+      class = "reactableduckdb_spec_error",
+      info = paste(names(spec), spec[[1]]$type)
+    )
+  }
+})
+
+test_that("pinning a column to its own grammar stays allowed", {
+  skip_if_no_backend_api()
+  tbl <- local_duckdb_tbl(n = 50)
+  same <- list(
+    list(name = list(type = "text")),
+    list(qty = list(type = "numeric")),
+    list(dt = list(type = "date")),
+    list(ts = list(type = "datetime")),
+    list(flag = list(type = "logical"))
+  )
+  for (spec in same) {
+    expect_s3_class(
+      reactable_duckdb_backend(tbl, filter_spec = spec),
+      "reactable_duckdb_backend"
+    )
+  }
+})
+
 test_that("filter_spec is validated at construction", {
   skip_if_no_backend_api()
   tbl <- local_duckdb_tbl(n = 50)
@@ -254,6 +428,26 @@ test_that("filter_spec is validated at construction", {
       tbl,
       filter_spec = list(name = list(fuzzy = TRUE))
     ),
+    class = "reactableduckdb_spec_error"
+  )
+  # Not a named list at all.
+  expect_error(
+    reactable_duckdb_backend(tbl, filter_spec = list(list(exact = TRUE))),
+    class = "reactableduckdb_spec_error"
+  )
+  # A named entry that is not a list.
+  expect_error(
+    reactable_duckdb_backend(tbl, filter_spec = list(name = "exact")),
+    class = "reactableduckdb_spec_error"
+  )
+  # `type` present but not one of the supported values.
+  expect_error(
+    reactable_duckdb_backend(tbl, filter_spec = list(name = list(type = "regex"))),
+    class = "reactableduckdb_spec_error"
+  )
+  # `exact` present but not a usable flag.
+  expect_error(
+    reactable_duckdb_backend(tbl, filter_spec = list(name = list(exact = NA))),
     class = "reactableduckdb_spec_error"
   )
 })

@@ -7,6 +7,30 @@
 
 filter_types <- c("text", "numeric", "date", "datetime", "logical")
 
+# Which grammars a column may be pinned to with `filter_spec$type`, keyed by
+# the grammar inferred from its R type.
+#
+# A pinned grammar decides the SQL predicate that gets built -- text emits
+# strpos(LOWER(col), ...), numeric emits arithmetic comparisons, and so on --
+# so a pin is only meaningful when the column's SQL type can evaluate that
+# predicate. Measured against DuckDB, the only cross-type pin that can is
+# DATE <-> TIMESTAMP, which compare freely; it is also the only one that is
+# useful, letting a timestamp column be filtered at date granularity (or the
+# reverse). Every other combination produced a raw binder error at request
+# time, except numeric -> logical, which silently compared a number to a
+# boolean and returned a surprising row set.
+#
+# Refusing the rest at construction is what keeps the promise in
+# design/filter-contract.md: malformed filtering raises a structured
+# reactableduckdb error, never a raw database error.
+compatible_filter_types <- list(
+  text = "text",
+  numeric = "numeric",
+  date = c("date", "datetime"),
+  datetime = c("date", "datetime"),
+  logical = "logical"
+)
+
 infer_capability_type <- function(col) {
   if (is.character(col) || is.factor(col)) {
     "text"
@@ -122,6 +146,18 @@ validate_filter_spec <- function(
           call = call
         )
       }
+      compatible <- compatible_filter_types[[inferred]]
+      if (!spec$type %in% compatible) {
+        rd_abort(
+          c(
+            "{.arg filter_spec} entry {.val {id}}: cannot pin {.field type} {.val {spec$type}} on a column that filters as {.val {inferred}}.",
+            "i" = "A pinned grammar decides the SQL predicate built for the column, and a {.val {inferred}} column cannot evaluate a {.val {spec$type}} one.",
+            "*" = "Compatible with {.val {inferred}}: {.val {compatible}}."
+          ),
+          class = "spec_error",
+          call = call
+        )
+      }
     }
     if (!is.null(spec$exact)) {
       if (
@@ -150,10 +186,15 @@ validate_filter_spec <- function(
 
 number_pattern <- "[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
 date_pattern <- "[0-9]{4}-[0-9]{2}-[0-9]{2}"
-datetime_pattern <- paste0(
-  date_pattern,
-  "(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?)?"
-)
+# The time components are range-constrained here rather than left to the
+# parser. parse_datetime_parts() falls back through tryFormats to "%Y-%m-%d",
+# and strptime matches that as a *prefix* -- so a loose "[0-9]{2}:[0-9]{2}"
+# let "2026-01-01 25:00:00" through as midnight on 2026-01-01, filtering
+# against an instant the user never asked for. Shape is validated by regex and
+# calendar validity by the parser, so an impossible time must be rejected
+# here; an impossible date (2026-02-30) still becomes NA in the parser.
+time_pattern <- "(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?"
+datetime_pattern <- paste0(date_pattern, "(?:[ T]", time_pattern, ")?")
 
 filter_value_abort <- function(
   id,

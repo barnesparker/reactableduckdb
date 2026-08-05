@@ -1,5 +1,22 @@
 # reactableduckdb (development version)
 
+* A datetime filter with an out-of-range time (`2026-01-01 25:00:00`,
+  `2026-01-01 12:99:00`) was silently read as midnight on that date and
+  filtered against an instant the user never typed. Hours, minutes, and
+  seconds are now range-checked and such a value is refused. The value shape
+  passed the old pattern, and `as.POSIXct()`'s format fallback ends at
+  `"%Y-%m-%d"`, which `strptime()` matches as a prefix.
+
+* `filter_spec`'s `type` is now checked against the column it pins. A column
+  may be pinned to its own grammar, and a `date`/`datetime` column to either
+  of those two — `DATE` and `TIMESTAMP` compare freely in DuckDB, so a
+  timestamp column can be filtered at date granularity. Every other
+  combination built a predicate the column's SQL type could not evaluate and
+  surfaced as a raw DuckDB binder error on the first request, except a
+  `numeric` column pinned to `logical`, which bound successfully and returned
+  a surprising row set. Incompatible pins are now refused at construction with
+  a `reactableduckdb_spec_error`.
+
 * Row selection previously identified a row by its position within the
   delivered page, so a selection made on one page also marked the row in that
   same position on every other page — rows the user never chose, with no error.

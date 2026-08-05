@@ -27,7 +27,15 @@ yields nondeterministic order between pages.}
 \item{filter_spec}{Optional named list of per-column filter overrides.
 Each entry may contain \code{exact = TRUE} (text columns match exactly
 instead of by substring) and/or \code{type} (pin one of \code{"text"},
-\code{"numeric"}, \code{"date"}, \code{"datetime"}, \code{"logical"}).}
+\code{"numeric"}, \code{"date"}, \code{"datetime"}, \code{"logical"}).
+
+A pinned \code{type} decides which SQL predicate is built for the column, so
+it must be one the column's type can evaluate. In practice that means a
+column may be pinned to its own grammar, and a \code{"date"}/\code{"datetime"}
+column to either of those two — DuckDB compares \code{DATE} and \code{TIMESTAMP}
+freely, so a timestamp column can be filtered at date granularity.
+Any other combination is refused at construction rather than failing as
+a database error on the first request.}
 
 \item{max_page_size}{Hard upper bound on rows per page. Requests beyond
 it are refused with an error, never clamped.}

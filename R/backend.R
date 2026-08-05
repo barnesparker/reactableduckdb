@@ -89,6 +89,14 @@ enable_query_log <- function(backend) {
 #'   Each entry may contain `exact = TRUE` (text columns match exactly
 #'   instead of by substring) and/or `type` (pin one of `"text"`,
 #'   `"numeric"`, `"date"`, `"datetime"`, `"logical"`).
+#'
+#'   A pinned `type` decides which SQL predicate is built for the column, so
+#'   it must be one the column's type can evaluate. In practice that means a
+#'   column may be pinned to its own grammar, and a `"date"`/`"datetime"`
+#'   column to either of those two — DuckDB compares `DATE` and `TIMESTAMP`
+#'   freely, so a timestamp column can be filtered at date granularity.
+#'   Any other combination is refused at construction rather than failing as
+#'   a database error on the first request.
 #' @param max_page_size Hard upper bound on rows per page. Requests beyond
 #'   it are refused with an error, never clamped.
 #' @param cache_counts Cache filtered row counts (bounded LRU, keyed by the
