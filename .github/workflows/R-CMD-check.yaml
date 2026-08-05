@@ -5,8 +5,6 @@
 # canonical source, so CI installs from the pinned SHA recorded in
 # renv.lock. A Posit Package Manager repository mirroring the same
 # repository is an equally valid source on runners that prefer it.
-#
-# NOTE: this workflow has not been executed from the development machine.
 
 on:
   push:
@@ -25,7 +23,7 @@ jobs:
       # Pinned in renv.lock and design/reactable-server-contract.md.
       REACTABLE_DEV_REF: glin/reactable@4a438397eaa83ec71a4dc3e895bbdcc595232d78
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: r-lib/actions/setup-pandoc@v2
 
